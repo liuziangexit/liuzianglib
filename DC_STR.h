@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <sstream>
 #include "DC_ERROR.h"
-//Version 2.4.1V10
-//20170323
+//Version 2.4.1V11
+//20170324
 
 namespace DC {
 
@@ -139,10 +139,31 @@ namespace DC {
 
 		}
 
-		int32_t insert(std::string &str, const std::string &input, const std::size_t& wheretoput) {//在 std::string str 中的 int32_t wheretoput 插入 std::string input
-																								   //成功返回1，如果 int32_t wheretoput 是一个非法的值，返回-1
-																								   //兼容中文
-			if (wheretoput < 0) return -1;
+		std::string insert(const std::string& str, const std::string& input, const std::size_t& wheretoput) {//在 std::string str[wheretoput] 之后插入 std::string input
+																											 //wheretoput非法时抛异常
+																											 //兼容中文
+			auto GetBefore = [&str, &wheretoput] {
+				std::string rv;
+				rv.reserve(wheretoput);
+				for (std::size_t i = 0; i < wheretoput; i++)
+					rv.push_back(str[i]);
+				return rv;
+			};
+			auto GetAfter = [&str, &wheretoput] {
+				std::string rv;
+				rv.reserve(str.size() - wheretoput);
+				for (std::size_t i = wheretoput; i < str.size(); i++)
+					rv.push_back(str[i]);
+				return rv;
+			};
+			if (wheretoput<0 || wheretoput>str.size()) throw DC::DC_ERROR("index illegal", 0);
+			return GetBefore() + input + GetAfter();
+		}
+
+		std::string insertCHS(const std::string& str, const std::string& input, const std::size_t& wheretoput) {//在 std::string str[wheretoput] 之后插入 std::string input
+																												//wheretoput非法时抛异常
+																												//兼容中文
+			if (wheretoput < 0) throw DC::DC_ERROR("index illegal", 0);
 			std::size_t realput = 0, count_ = 0;
 			std::string before, after;
 			for (std::size_t i = 0; i < str.size(); i++) {
@@ -151,20 +172,18 @@ namespace DC {
 				else count_++;
 			}
 			if (wheretoput >= count_) {
-				if (wheretoput == count_) { str += input; return 1; }
-				return -1;
+				if (wheretoput == count_) return str + input;
+				throw DC::DC_ERROR("index illegal", 0);
 			}
+			before.reserve(realput);
 			for (std::size_t i = 0; i < realput; i++) {
 				if (str[i] != NULL) before.push_back(str[i]);
 			}
+			after.reserve(str.size() - realput);
 			for (std::size_t i = 0; i < str.size() - realput; i++) {
 				if (str[(realput + i)] != NULL) after.push_back(str[(realput)+i]);
 			}
-			str.clear();
-			str += before;
-			str += input;
-			str += after;
-			return 1;
+			return before + input + after;
 		}
 
 		std::string toUpper(std::string str) {//将 std::string str 中的小写字符转为大写
