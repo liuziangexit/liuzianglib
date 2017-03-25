@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <sstream>
 #include "DC_ERROR.h"
-//Version 2.4.1V11
-//20170324
+//Version 2.4.1V13
+//20170325
 
 namespace DC {
 
@@ -245,7 +245,7 @@ namespace DC {
 		char* toType<char*>(const std::string &str) = delete;
 
 		template <>
-		std::wstring toType<std::wstring>(const std::string& s) {
+		std::wstring toType<std::wstring>(const std::string& s) {//多线程使用这个必须加锁
 			STRSpace::SetLocal sl;
 			const char* _Source = s.c_str();
 			size_t _Dsize = s.size() + 1;
@@ -268,7 +268,7 @@ namespace DC {
 		}
 
 		template <>
-		std::string toString<std::wstring>(const std::wstring& ws) {
+		std::string toString<std::wstring>(const std::wstring& ws) {//多线程使用这个必须加锁
 			STRSpace::SetLocal sl;
 			const wchar_t* _Source = ws.c_str();
 			size_t _Dsize = 2 * ws.size() + 1;
