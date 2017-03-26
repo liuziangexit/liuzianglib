@@ -1,2 +1,25 @@
-# liuzianglib 2.4
-自己写着玩的 C++ 库。包含：异常信息、文件操作、MySQL C 语言 API 的面向对象封装、字符串操作、TCP 操作封装（基于 WinSock2）、线程池(在 https://github.com/ufownl/simple_thread_pool 的基础上改进)、计时器、Type Traits、字符界面的简单UI、基于 MySQL 的用户系统、可以保存任意POD类型的类、MD5（抄来的）、json解析(未完成)、其他的一些东西。
+<h1>liuzianglib 2.4</h1>
+<h3>功能总览</h3>
+<p>
+        <a href="https://liuziangexit.com/liuzianglib/DC_json">JSON解析</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_STR">字符串操作</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_file">文件操作</a></li>
+        <a href="https://liuziangexit.com/liuzianglib/DC_ThreadPool">线程池</a>(修改自 <a href="https://github.com/ufownl/simple_thread_pool">游侠UFO</a>)<br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_TypeInfo">Type Traits</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_var">泛数据类型容器</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_DC_ERROR">异常信息</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_DC_MySQL">MySQL API 的面向对象封装</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_TCP">WinSock2 封装</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_timer">计时器</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_DC_UserInfo">基于 MySQL 的用户系统</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_UIBox">字符界面的简单UI</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_md5">MD5</a>(修改自 未知来源)<br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_other">其它</a>
+</p>
+<h3>使用 liuzianglib 开发的软件</h3>
+<p>
+<a href="https://liuziangexit.com/BFT">战绩追踪</a>
+</p>
+<h3>其它</h3>
+<p>liuzianglib 仅在 Microsoft Visual Studio 2015/2017 中编译通过。</p>
+<p><a href="https://liuziangexit.com/liuzianglib">liuzianglib</a> 由 <a href="https://liuziangexit.com">liuziangexit</a> 维护并遵循 GPL 协议开放源代码。</p>
