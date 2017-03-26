@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <sstream>
 #include "DC_ERROR.h"
-//Version 2.4.1V13
-//20170325
+//Version 2.4.1V14
+//20170326
 
 namespace DC {
 
@@ -222,6 +222,16 @@ namespace DC {
 				index++;
 			}
 			return TEMP_str;
+		}
+
+		inline std::string getSub(const std::string& str, const std::size_t& startpos, const std::size_t& endpos) {//获取子串
+																												   //从startpos+1到endpos-1
+			if (endpos < startpos || endpos>str.size() || endpos < 0) throw DC::DC_ERROR("pos illegal", 0);
+			std::string returnvalue;
+			returnvalue.reserve(endpos - startpos);
+			for (std::size_t i = startpos + 1; i <= endpos - 1 && i < str.size(); i++)
+				returnvalue.push_back(str[i]);
+			return returnvalue;
 		}
 
 		template <typename TYPE>
