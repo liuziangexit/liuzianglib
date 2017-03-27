@@ -3,10 +3,11 @@
 #define liuzianglib_File
 #include <string>
 #include "DC_ERROR.h"
-//Version 2.4.1V10
-//20170323
+//Version 2.4.1V15
+//20170327
 
 #define ERROR_CANTOPENFILE DC::DC_ERROR(filename,"CAN NOT OPEN FILE", -1)
+#define ERROR_CANTGETSIZE DC::DC_ERROR(filename,"CAN NOT GET FILE SIZE", -1)
 
 namespace DC {
 
@@ -87,7 +88,9 @@ namespace DC {
 			file_ptr ptr;
 			if (!exists(filename, ptr)) throw ERROR_CANTOPENFILE;
 			fseek(ptr.get(), 0L, SEEK_END);
-			return ftell(ptr.get());
+			const auto& rv = ftell(ptr.get());
+			if (rv < 0) throw ERROR_CANTGETSIZE;
+			return rv;//有符号无符号不匹配可以忽略，这里已经处理过那种错误了
 		}
 
 		std::string read(const std::string& filename) {

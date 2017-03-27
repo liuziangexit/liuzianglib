@@ -7,8 +7,8 @@
 #include <type_traits>
 #include "DC_STR.h"
 #include "liuzianglib.h"
-//Version 2.4.1V14
-//20170326
+//Version 2.4.1V15
+//20170327
 
 namespace DC {
 
@@ -18,6 +18,11 @@ namespace DC {
 
 			typedef std::tuple<std::size_t, std::size_t> PosPair;
 			typedef std::vector<std::tuple<jsonSpace::PosPair, jsonSpace::PosPair>> ObjTable;
+
+			inline bool comparePosPair(const PosPair& input0, const PosPair& input1) {//比较两个PosPair的开始位置
+				                                                                      //sort时使用，较小的排在前面
+				return std::get<0>(input0) < std::get<0>(input1);
+			}
 
 			inline bool SybolValid(const std::vector<std::size_t>& AllStartSymbol, const std::vector<std::size_t>& EndStartSymbol) {//判断开始符号和结束符号数量是否一样
 				return AllStartSymbol.size() == EndStartSymbol.size();
@@ -95,6 +100,81 @@ namespace DC {
 
 		}
 
+		class value;
+		class number;
+		class array;
+		class object;
+
+		class transparent final :public jsonSpace::base {
+		public:
+			transparent();
+
+			transparent(const transparent&);
+
+			transparent(transparent&&)noexcept;
+
+			transparent(const std::string&);
+
+			transparent(std::string&&);
+
+			virtual ~transparent()override;//说找不到定义不管
+
+		public:
+			transparent& operator=(const transparent& input) {
+				if (this == &input)
+					return *this;
+				setRawStr(input.rawStr);
+				return *this;
+			}
+
+			transparent& operator=(transparent&& input)noexcept {
+				if (this == &input)
+					return *this;
+				setRawStr(std::move(input.rawStr));
+				return *this;
+			}
+			
+		public:
+			virtual inline void set(const std::string& input)override {
+				setRawStr(input);
+			}
+
+			virtual inline void set(std::string&& input)override {
+				setRawStr(std::move(input));
+			}
+
+			inline bool is_empty() {
+				return rawStr.empty();
+			}
+
+			object& as_object();
+
+			object&& to_object();
+
+			value& as_value();
+
+			value&& to_value();
+
+			number& as_number();
+
+			number&& to_number();
+
+			array& as_array();
+
+			array&& to_array();
+
+		protected:
+			virtual inline void RemoveOutsideSymbol() {}
+
+			virtual inline void refresh()noexcept {}
+
+		private:
+			value& m_value;
+			number& m_number;
+			array& m_array;
+			object& m_object;
+		};
+
 		class value final :public jsonSpace::base {
 		public:
 			value() = default;
@@ -104,7 +184,7 @@ namespace DC {
 				isStr = input.isStr;
 			}
 
-			value(value&& input) {
+			value(value&& input)noexcept {
 				setRawStr(std::move(input.rawStr));
 				isStr = input.isStr;
 			}
@@ -128,7 +208,7 @@ namespace DC {
 				return *this;
 			}
 
-			value& operator=(value&& input) {
+			value& operator=(value&& input)noexcept {
 				if (this == &input)
 					return *this;
 				setRawStr(std::move(input.rawStr));
@@ -258,7 +338,7 @@ namespace DC {
 			}
 
 			bool makeIsStr()noexcept {
-				char firstChar = NULL, lastChar = NULL;
+				std::size_t firstChar = 0, lastChar = 0;
 
 				//判断合不合法
 				try {
@@ -285,7 +365,7 @@ namespace DC {
 				setRawStr(input.rawStr);
 			}
 
-			number(number&& input) {
+			number(number&& input)noexcept {
 				setRawStr(std::move(input.rawStr));
 			}
 
@@ -307,7 +387,7 @@ namespace DC {
 				return *this;
 			}
 
-			number& operator=(number&& input) {
+			number& operator=(number&& input)noexcept {
 				if (this == &input)
 					return *this;
 				setRawStr(std::move(input.rawStr));
@@ -421,7 +501,203 @@ namespace DC {
 			virtual inline void refresh()noexcept {}
 		};
 
-		class array final :public jsonSpace::base {};
+		class array final :public jsonSpace::base {
+		public:
+			array() = default;
+
+			array(const array& input) :ObjectSymbolPair(input.ObjectSymbolPair), StringSymbolPair(input.StringSymbolPair) {
+				setRawStr(input.rawStr);
+			}
+
+			array(array&& input)noexcept :ObjectSymbolPair(std::move(input.ObjectSymbolPair)), StringSymbolPair(std::move(input.StringSymbolPair)) {
+				setRawStr(std::move(input.rawStr));
+			}
+
+			array(const std::string& input) {
+				set(input);
+			}
+
+			array(std::string&& input) {
+				set(std::move(input));
+			}
+
+			virtual ~array() = default;
+
+			typedef std::size_t size_type;
+
+		public:
+			array& operator=(const array& input) {
+				if (this == &input)
+					return *this;
+				setRawStr(input.rawStr);
+				ObjectSymbolPair = input.ObjectSymbolPair;
+				//ArraySymbolPair = input.ArraySymbolPair;
+				StringSymbolPair = input.StringSymbolPair;
+				return *this;
+			}
+
+			array& operator=(array&& input)noexcept {
+				if (this == &input)
+					return *this;
+				setRawStr(std::move(input.rawStr));
+				ObjectSymbolPair = std::move(input.ObjectSymbolPair);
+				//ArraySymbolPair = std::move(input.ArraySymbolPair);
+				StringSymbolPair = std::move(input.StringSymbolPair);
+				return *this;
+			}
+
+			transparent operator[](const std::size_t& index)const {
+				if (index > ObjectSymbolPair.size() - 1) throw DC::DC_ERROR("array::operator[]", "index out of range", 0);//size_t无符号不会有小数，所以不考虑小于0
+				return DC::STR::getSub(rawStr, std::get<0>(ObjectSymbolPair[index]) - 1, std::get<1>(ObjectSymbolPair[index]) + 1);
+			}
+
+		public:
+			virtual void set(const std::string& input)override {
+				setRawStr(input);
+				try {
+					refresh();
+				}
+				catch (const DC::DC_ERROR& ex) {
+					if (!rawStr.empty()) rawStr.clear();
+					throw ex;
+				}
+			}
+
+			virtual void set(std::string&& input)override {
+				setRawStr(std::move(input));
+				try {
+					refresh();
+				}
+				catch (const DC::DC_ERROR& ex) {
+					if (!rawStr.empty()) rawStr.clear();
+					throw ex;
+				}
+			}
+
+			inline bool empty() {
+				return ObjectSymbolPair.empty();
+			}
+
+			inline size_type size() {
+				return ObjectSymbolPair.size();
+			}
+
+		protected:
+			virtual void RemoveOutsideSymbol() {//删除最外面的符号对
+				bool flag = false;
+
+				for (auto i = rawStr.begin(); i != rawStr.end(); i++) {
+					if (*i == '{' || *i == '[') {
+						rawStr.erase(i);
+						flag = true;
+						break;
+					}
+				}
+
+				if (flag != true) return;
+
+				for (auto i = rawStr.rbegin(); i != rawStr.rend(); i++) {
+					if (*i == '}' || *i == ']') {
+						rawStr.erase(--i.base());
+						flag = false;
+						break;
+					}
+				}
+
+				if (flag == true)
+					throw DC::DC_ERROR("object::RemoveOutsideSymbol", "can not find end symbol", 0);
+			}
+
+			virtual void refresh() {
+				try {
+					RemoveOutsideSymbol();
+					StringSymbolPair = this->getStringSymbolPair(rawStr);
+					ObjectSymbolPair = getSymbolPair("{", "}");
+					std::reverse(ObjectSymbolPair.begin(), ObjectSymbolPair.end());
+				}
+				catch (const DC::DC_ERROR& ex) {
+					clear_except_rawStr();
+					throw ex;
+				}
+			}
+
+		private:
+			bool isInsideStr(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
+				for (const auto& p : StringSymbolPair) {
+					if (input > std::get<0>(p) && input < std::get<1>(p)) return true;
+				}
+				return false;
+			}
+
+			bool isInsideObj(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
+				for (const auto& p : ObjectSymbolPair) {
+					if (input > std::get<0>(p) && input < std::get<1>(p)) return true;
+				}
+				return false;
+			}
+
+			std::vector<jsonSpace::PosPair> getStringSymbolPair(std::string str)const {//找出配对的""
+																					   //不能嵌套哦
+																					   //有一次参数拷贝开销
+				str = DC::STR::replace(str, DC::STR::find(str, R"(\")"), "  ");//把\"换成两个空格，既保证了长度不变，又保证了去除用户字符串里面的引号
+				std::vector<std::size_t> AllSymbol = DC::STR::find(str, "\"").getplace_ref();
+				std::vector<jsonSpace::PosPair> returnvalue;
+
+				if (AllSymbol.size() % 2 != 0)
+					throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);
+				while (!AllSymbol.empty()) {
+					returnvalue.emplace_back(*AllSymbol.begin(), *(AllSymbol.begin() + 1));
+					AllSymbol.erase(AllSymbol.begin());
+					AllSymbol.erase(AllSymbol.begin());
+				}
+				return returnvalue;
+			}
+
+			std::vector<jsonSpace::PosPair> getSymbolPair(const char* const StartSymbol, const char* const EndSymbol)const {//防止js字符串里的符号影响
+				std::vector<std::size_t> AllStartSymbol = DC::STR::find(rawStr, StartSymbol).getplace_ref(), AllEndSymbol = DC::STR::find(rawStr, EndSymbol).getplace_ref();
+				std::vector<jsonSpace::PosPair> returnvalue;
+
+				for (auto i = AllStartSymbol.begin(); i != AllStartSymbol.end(); ) {
+					if (isInsideStr(*i)) {
+						i = AllStartSymbol.erase(i);
+						continue;
+					}
+					i++;
+				}
+				for (auto i = AllEndSymbol.begin(); i != AllEndSymbol.end(); ) {
+					if (isInsideStr(*i)) {
+						i = AllEndSymbol.erase(i);
+						continue;
+					}
+					i++;
+				}
+
+				if (!jsonSpace::SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);//判断开始符号和结束符号数量是否一样				
+																																			   //这个算法核心在于“距离AllStartSymbol中的最后一个元素最近且在其后的AllEndSymbol元素必然可以与之配对”。
+				for (auto i = AllStartSymbol.rbegin(); i != AllStartSymbol.rend(); i = AllStartSymbol.rbegin()) {
+					std::size_t minimal = INT_MAX;//int类型最大值
+					auto iter = AllEndSymbol.end();
+					for (auto i2 = AllEndSymbol.begin(); i2 != AllEndSymbol.end(); i2++) {
+						if ((!(*i2 < *i)) && (*i2 - *i) < minimal) { minimal = *i2 - *i; iter = i2; }//找出和当前开始符号最近的结束符号
+					}
+					if (iter == AllEndSymbol.end())
+						throw DC::DC_ERROR("undefined behavior", 0);//理论上应该不会抛出。。。
+					returnvalue.emplace_back(*i, *iter);
+					AllStartSymbol.erase(--i.base());
+					AllEndSymbol.erase(iter);
+				}
+				return returnvalue;
+			}
+
+			inline void clear_except_rawStr() {
+				if (!StringSymbolPair.empty()) StringSymbolPair.clear();
+				if (!ObjectSymbolPair.empty()) ObjectSymbolPair.clear();
+				//if (!ArraySymbolPair.empty()) ArraySymbolPair.clear();
+			}
+
+		private:
+			std::vector<jsonSpace::PosPair> ObjectSymbolPair, StringSymbolPair;
+		};
 
 		class object final :public jsonSpace::base {
 		public:
@@ -431,7 +707,7 @@ namespace DC {
 				setRawStr(input.rawStr);
 			}
 
-			object(object&& input) :ObjectSymbolPair(std::move(input.ObjectSymbolPair)), ArraySymbolPair(std::move(input.ArraySymbolPair)), StringSymbolPair(std::move(input.StringSymbolPair)) {
+			object(object&& input)noexcept :ObjectSymbolPair(std::move(input.ObjectSymbolPair)), ArraySymbolPair(std::move(input.ArraySymbolPair)), StringSymbolPair(std::move(input.StringSymbolPair)) {
 				setRawStr(std::move(input.rawStr));
 			}
 
@@ -456,7 +732,7 @@ namespace DC {
 				return *this;
 			}
 
-			object& operator=(object&& input) {
+			object& operator=(object&& input)noexcept {
 				if (this == &input)
 					return *this;
 				setRawStr(std::move(input.rawStr));
@@ -491,7 +767,7 @@ namespace DC {
 				}
 			}
 
-			object at(const std::string& key)const {
+			transparent at(const std::string& key)const {
 				//搜索key
 				auto findResult_Full = DC::STR::find(rawStr, jsonSpace::GetJsStr(key));
 				auto findResult = findResult_Full.getplace_ref();
@@ -601,27 +877,8 @@ namespace DC {
 				/*this内的函数与STR::getSub()参数逻辑不同，所以某些地方进行了+1或-1的工作。
 				this内的函数从startpos执行到endpos，其中包括startpos和endpos所指向的位置本身；
 				而getSub则只会对startpos与endpos之间的进行操作（不包括pos指向的位置本身），当startpos==endpos时，getSub将会返回一个空串*/
-				return object(STR::getSub(rawStr, startpos - 1, endpos));
-			}
-
-			value as_value()const {//this不变，拷贝
-				auto tempStr = rawStr;
-				return value(std::move(tempStr));
-			}
-
-			value to_value() {//this清空，移动
-				auto tempStr = std::move(rawStr);
-				return value(std::move(tempStr));
-			}
-
-			number as_number()const {//this不变，拷贝
-				auto tempStr = rawStr;
-				return number(std::move(tempStr));
-			}
-
-			number to_number() {//this清空，移动
-				auto tempStr = std::move(rawStr);
-				return number(std::move(tempStr));
+				
+				return transparent(STR::getSub(rawStr, startpos - 1, endpos));
 			}
 
 		protected:
@@ -657,15 +914,10 @@ namespace DC {
 					ArraySymbolPair = getSymbolPair("[", "]");
 				}
 				catch (const DC::DC_ERROR& ex) {
-					if (!StringSymbolPair.empty()) StringSymbolPair.clear();
-					if (!ObjectSymbolPair.empty()) ObjectSymbolPair.clear();
-					if (!ArraySymbolPair.empty()) ArraySymbolPair.clear();
+					clear_except_rawStr();
 					throw ex;
 				}
 			}
-
-		protected:
-			std::vector<jsonSpace::PosPair> ObjectSymbolPair, ArraySymbolPair, StringSymbolPair;
 
 		private:
 			bool isInsideStr(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
@@ -735,13 +987,80 @@ namespace DC {
 				return returnvalue;
 			}
 
-			inline void clear() {
-				rawStr.clear();
-				ObjectSymbolPair.clear();
-				ArraySymbolPair.clear();
-				StringSymbolPair.clear();
+			inline void clear_except_rawStr() {
+				if (!StringSymbolPair.empty()) StringSymbolPair.clear();
+				if (!ObjectSymbolPair.empty()) ObjectSymbolPair.clear();
+				if (!ArraySymbolPair.empty()) ArraySymbolPair.clear();
 			}
+
+		private:
+			std::vector<jsonSpace::PosPair> ObjectSymbolPair, ArraySymbolPair, StringSymbolPair;
 		};
+
+		transparent::transparent() :m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {}
+
+		transparent::transparent(const transparent& input) :m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+			setRawStr(input.rawStr);
+		}
+
+		transparent::transparent(transparent&& input)noexcept : m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+			setRawStr(std::move(input.rawStr));
+		}
+
+		transparent::transparent(const std::string& input) :m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+			set(input);
+		}
+
+		transparent::transparent(std::string&& input) :m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+			set(std::move(input));
+		}
+
+		transparent::~transparent()noexcept {
+			delete &m_array;
+			delete &m_number;
+			delete &m_object;
+			delete &m_value;
+		}
+
+		object& transparent::as_object() {
+			m_object.set(rawStr);
+			return m_object;
+		}
+
+		object&& transparent::to_object() {
+			m_object.set(std::move(rawStr));
+			return std::move(m_object);
+		}
+
+		value& transparent::as_value() {
+			m_value.set(rawStr);
+			return m_value;
+		}
+
+		value&& transparent::to_value() {
+			m_value.set(std::move(rawStr));
+			return std::move(m_value);
+		}
+
+		number& transparent::as_number() {
+			m_number.set(rawStr);
+			return m_number;
+		}
+
+		number&& transparent::to_number() {
+			m_number.set(std::move(rawStr));
+			return std::move(m_number);
+		}
+
+		array& transparent::as_array() {
+			m_array.set(rawStr);
+			return m_array;
+		}
+
+		array&& transparent::to_array() {
+			m_array.set(std::move(rawStr));
+			return std::move(m_array);
+		}
 
 	}
 }
