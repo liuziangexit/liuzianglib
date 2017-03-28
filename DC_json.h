@@ -7,15 +7,15 @@
 #include "DC_STR.h"
 #include "liuzianglib.h"
 #include "DC_type.h"
-//Version 2.4.1V18
-//20170328
+//Version 2.4.1V19
+//20170329
 
 namespace DC {
 
 	namespace json {
 
 		namespace jsonSpace {
-			
+
 			struct PosPair {
 				PosPair() = default;
 
@@ -27,7 +27,7 @@ namespace DC {
 			typedef std::vector<PosPair> ObjTable;
 
 			inline bool comparePosPair(const PosPair& input0, const PosPair& input1) {//比较两个PosPair的开始位置
-				                                                                      //sort时使用，较小的排在前面
+																					  //sort时使用，较小的排在前面
 				return input0.first < input1.first;
 			}
 
@@ -37,12 +37,12 @@ namespace DC {
 
 			std::vector<PosPair> getSymbolPair(const std::string& str, const char* const StartSymbol, const char* const EndSymbol) {//找出配对的符号，比如可以解析((2+2)*(1+1)*6)这种东西。
 																																	//返回值是std::vector<PosPair>，每一个PosPair都是一对符号的位置，PosPair<0>是开始符号的位置，PosPair<1>是结束符号的位置
-				                                                                                                                    //不支持StartSymbol==EndSymbol的情况
+																																	//不支持StartSymbol==EndSymbol的情况
 				std::vector<std::size_t> AllStartSymbol = DC::STR::find(str, StartSymbol).getplace_ref(), AllEndSymbol = DC::STR::find(str, EndSymbol).getplace_ref();
 				std::vector<PosPair> returnvalue;
 
 				if (!SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);//判断开始符号和结束符号数量是否一样				
-				//这个算法核心在于“距离AllStartSymbol中的最后一个元素最近且在其后的AllEndSymbol元素必然可以与之配对”。
+																																	//这个算法核心在于“距离AllStartSymbol中的最后一个元素最近且在其后的AllEndSymbol元素必然可以与之配对”。
 				for (auto i = AllStartSymbol.rbegin(); i != AllStartSymbol.rend(); i = AllStartSymbol.rbegin()) {
 					std::size_t minimal = INT_MAX;//int类型最大值
 					auto iter = AllEndSymbol.end();
@@ -84,7 +84,7 @@ namespace DC {
 				}
 
 				std::size_t findNeXTchar(std::size_t startpos)const {//找到下一个字符，比如"name:  s"，从5开始找，找到s结束，忽略途中所有格式控制符
-																//找不到抛异常
+																	 //找不到抛异常
 					if (rawStr.empty()) throw false;
 					for (; startpos < rawStr.size(); startpos++)
 						if (rawStr[startpos] != ' '&&rawStr[startpos] != '\n'&&rawStr[startpos] != '\r'&&rawStr[startpos] != '\t')
@@ -93,7 +93,7 @@ namespace DC {
 				}
 
 				std::size_t findNeXTchar(const char& findthis, std::size_t startpos)const {//找到下一个字符
-																					  //找不到抛异常
+																						   //找不到抛异常
 					if (rawStr.empty()) throw false;
 					for (; startpos < rawStr.size(); startpos++)
 						if (rawStr[startpos] == findthis)
@@ -140,7 +140,7 @@ namespace DC {
 				setRawStr(std::move(input.rawStr));
 				return *this;
 			}
-			
+
 		public:
 			virtual inline void set(const std::string& input)override {
 				setRawStr(input);
@@ -272,9 +272,9 @@ namespace DC {
 				isStr = false;
 				return DC::var(std::move(rawStr));
 			}
-			
+
 			inline std::string as_string()const {
-				if(!is_string())
+				if (!is_string())
 					throw DC::DC_ERROR("value::as_string", "can not as string", 0);
 				return rawStr;
 			}
@@ -321,7 +321,7 @@ namespace DC {
 
 		private:
 			std::size_t findNeXTcharReverse(std::size_t startpos) {//找到下一个字符，比如"name:  s"，从5开始找，找到s结束，忽略途中所有格式控制符
-															       //找不到抛异常
+																   //找不到抛异常
 				if (rawStr.empty()) throw false;
 				while (startpos >= 0) {
 					if (rawStr[startpos] != ' '&&rawStr[startpos] != '\n'&&rawStr[startpos] != '\r'&&rawStr[startpos] != '\t')
@@ -333,7 +333,7 @@ namespace DC {
 			}
 
 			std::size_t findNeXTcharReverse(const char& findthis, std::size_t startpos) {//找到下一个字符，比如"name:  s"，从5开始找，找到s结束，忽略途中所有格式控制符
-																   //找不到抛异常
+																						 //找不到抛异常
 				if (rawStr.empty()) throw false;
 				while (startpos >= 0) {
 					if (rawStr[startpos] == findthis)
@@ -400,7 +400,7 @@ namespace DC {
 				setRawStr(std::move(input.rawStr));
 				return *this;
 			}
-			
+
 			bool operator==(const number& input)const {
 				try {
 					return this->as_double() == input.as_double();
@@ -729,11 +729,11 @@ namespace DC {
 			}
 
 		protected:
-			bool isInsideStr(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
+			bool isInsideStr(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
 				for (const auto& p : StringSymbolPair) {
-					if (input > p.first && input < p.second) return true;
+					if (input < p.first || input > p.second) return false;
 				}
-				return false;
+				return true;
 			}
 
 			bool isInsideObj(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
@@ -954,7 +954,7 @@ namespace DC {
 
 		transparent::transparent() :m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {}
 
-		transparent::transparent(const transparent& input) :m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+		transparent::transparent(const transparent& input) : m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
 			setRawStr(input.rawStr);
 		}
 
@@ -962,11 +962,11 @@ namespace DC {
 			setRawStr(std::move(input.rawStr));
 		}
 
-		transparent::transparent(const std::string& input) :m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+		transparent::transparent(const std::string& input) : m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
 			set(input);
 		}
 
-		transparent::transparent(std::string&& input) :m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+		transparent::transparent(std::string&& input) : m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
 			set(std::move(input));
 		}
 
