@@ -3,8 +3,8 @@
 #define liuzianglib_File
 #include <string>
 #include "DC_ERROR.h"
-//Version 2.4.1V15
-//20170327
+//Version 2.4.1V16
+//20170328
 
 #define ERROR_CANTOPENFILE DC::DC_ERROR(filename,"CAN NOT OPEN FILE", -1)
 #define ERROR_CANTGETSIZE DC::DC_ERROR(filename,"CAN NOT GET FILE SIZE", -1)
@@ -19,6 +19,7 @@ namespace DC {
 			                  //可以通过if(file_ptr)的方式判断file_ptr是否已经打开
 			                  //可以在使用时手动fclose(file_ptr::get())，这不会导致未定义行为
 			                  //仅支持移动拷贝
+			                  //某些时候发现在使用此类的过程中有1(VS内存查看器中的“分配(差异)”)内存没有回收，这不是内存泄漏。
 		public:
 			file_ptr() :fp(nullptr) {}
 

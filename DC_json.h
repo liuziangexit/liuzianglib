@@ -1,27 +1,34 @@
 #pragma once
 #ifndef liuzianglib_json
 #define liuzianglib_json
-#include <tuple>
 #include <vector>
 #include <limits>
 #include <type_traits>
 #include "DC_STR.h"
 #include "liuzianglib.h"
-//Version 2.4.1V15
-//20170327
+#include "DC_type.h"
+//Version 2.4.1V16
+//20170328
 
 namespace DC {
 
 	namespace json {
 
 		namespace jsonSpace {
+			
+			struct PosPair {
+				PosPair() = default;
 
-			typedef std::tuple<std::size_t, std::size_t> PosPair;
-			typedef std::vector<std::tuple<jsonSpace::PosPair, jsonSpace::PosPair>> ObjTable;
+				PosPair(const DC::pos_type& input1, const DC::pos_type& input2) :first(input1), second(input2) {}
+
+				DC::pos_type first, second;
+			};
+
+			typedef std::vector<PosPair> ObjTable;
 
 			inline bool comparePosPair(const PosPair& input0, const PosPair& input1) {//比较两个PosPair的开始位置
 				                                                                      //sort时使用，较小的排在前面
-				return std::get<0>(input0) < std::get<0>(input1);
+				return input0.first < input1.first;
 			}
 
 			inline bool SybolValid(const std::vector<std::size_t>& AllStartSymbol, const std::vector<std::size_t>& EndStartSymbol) {//判断开始符号和结束符号数量是否一样
@@ -505,11 +512,11 @@ namespace DC {
 		public:
 			array() = default;
 
-			array(const array& input) :ObjectSymbolPair(input.ObjectSymbolPair), StringSymbolPair(input.StringSymbolPair) {
+			array(const array& input) : ObjectSymbolPair(input.ObjectSymbolPair), ArraySymbolPair(input.ArraySymbolPair), StringSymbolPair(input.StringSymbolPair) {
 				setRawStr(input.rawStr);
 			}
 
-			array(array&& input)noexcept :ObjectSymbolPair(std::move(input.ObjectSymbolPair)), StringSymbolPair(std::move(input.StringSymbolPair)) {
+			array(array&& input)noexcept : ObjectSymbolPair(std::move(input.ObjectSymbolPair)), ArraySymbolPair(std::move(input.ArraySymbolPair)), StringSymbolPair(std::move(input.StringSymbolPair)) {
 				setRawStr(std::move(input.rawStr));
 			}
 
@@ -531,7 +538,7 @@ namespace DC {
 					return *this;
 				setRawStr(input.rawStr);
 				ObjectSymbolPair = input.ObjectSymbolPair;
-				//ArraySymbolPair = input.ArraySymbolPair;
+				ArraySymbolPair = input.ArraySymbolPair;
 				StringSymbolPair = input.StringSymbolPair;
 				return *this;
 			}
@@ -541,20 +548,21 @@ namespace DC {
 					return *this;
 				setRawStr(std::move(input.rawStr));
 				ObjectSymbolPair = std::move(input.ObjectSymbolPair);
-				//ArraySymbolPair = std::move(input.ArraySymbolPair);
+				ArraySymbolPair = std::move(input.ArraySymbolPair);
 				StringSymbolPair = std::move(input.StringSymbolPair);
 				return *this;
 			}
 
 			transparent operator[](const std::size_t& index)const {
 				if (index > ObjectSymbolPair.size() - 1) throw DC::DC_ERROR("array::operator[]", "index out of range", 0);//size_t无符号不会有小数，所以不考虑小于0
-				return DC::STR::getSub(rawStr, std::get<0>(ObjectSymbolPair[index]) - 1, std::get<1>(ObjectSymbolPair[index]) + 1);
+				return DC::STR::getSub(rawStr, ObjectSymbolPair[index].first - 1, ObjectSymbolPair[index].second + 1);
 			}
 
 		public:
 			virtual void set(const std::string& input)override {
 				setRawStr(input);
 				try {
+					RemoveOutsideSymbol();
 					refresh();
 				}
 				catch (const DC::DC_ERROR& ex) {
@@ -566,6 +574,7 @@ namespace DC {
 			virtual void set(std::string&& input)override {
 				setRawStr(std::move(input));
 				try {
+					RemoveOutsideSymbol();
 					refresh();
 				}
 				catch (const DC::DC_ERROR& ex) {
@@ -587,7 +596,7 @@ namespace DC {
 				bool flag = false;
 
 				for (auto i = rawStr.begin(); i != rawStr.end(); i++) {
-					if (*i == '{' || *i == '[') {
+					if (*i == '[') {
 						rawStr.erase(i);
 						flag = true;
 						break;
@@ -597,7 +606,7 @@ namespace DC {
 				if (flag != true) return;
 
 				for (auto i = rawStr.rbegin(); i != rawStr.rend(); i++) {
-					if (*i == '}' || *i == ']') {
+					if (*i == ']') {
 						rawStr.erase(--i.base());
 						flag = false;
 						break;
@@ -610,10 +619,20 @@ namespace DC {
 
 			virtual void refresh() {
 				try {
-					RemoveOutsideSymbol();
 					StringSymbolPair = this->getStringSymbolPair(rawStr);
 					ObjectSymbolPair = getSymbolPair("{", "}");
+					ArraySymbolPair = getSymbolPair("[", "]");
+
+					for (auto i = ObjectSymbolPair.begin(); i != ObjectSymbolPair.end();) {
+						if (isInsideStr(i->first) || isInsideObj(i->first) || isInsideArr(i->first)) {
+							i = ObjectSymbolPair.erase(i);
+							continue;
+						}
+						i++;
+					}
+
 					std::reverse(ObjectSymbolPair.begin(), ObjectSymbolPair.end());
+
 				}
 				catch (const DC::DC_ERROR& ex) {
 					clear_except_rawStr();
@@ -622,16 +641,23 @@ namespace DC {
 			}
 
 		private:
-			bool isInsideStr(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
+			inline bool isInsideStr(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
 				for (const auto& p : StringSymbolPair) {
-					if (input > std::get<0>(p) && input < std::get<1>(p)) return true;
+					if (input > p.first && input < p.second) return true;
 				}
 				return false;
 			}
 
 			bool isInsideObj(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
 				for (const auto& p : ObjectSymbolPair) {
-					if (input > std::get<0>(p) && input < std::get<1>(p)) return true;
+					if (input > p.first && input < p.second) return true;
+				}
+				return false;
+			}
+
+			bool isInsideArr(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
+				for (const auto& p : ArraySymbolPair) {
+					if (input > p.first && input < p.second) return true;
 				}
 				return false;
 			}
@@ -654,22 +680,21 @@ namespace DC {
 			}
 
 			std::vector<jsonSpace::PosPair> getSymbolPair(const char* const StartSymbol, const char* const EndSymbol)const {//防止js字符串里的符号影响
-				std::vector<std::size_t> AllStartSymbol = DC::STR::find(rawStr, StartSymbol).getplace_ref(), AllEndSymbol = DC::STR::find(rawStr, EndSymbol).getplace_ref();
+				std::vector<std::size_t> AllStartSymbolRaw = DC::STR::find(rawStr, StartSymbol).getplace_ref(), AllEndSymbolRaw = DC::STR::find(rawStr, EndSymbol).getplace_ref();
+				std::vector<std::size_t> AllStartSymbol, AllEndSymbol;
 				std::vector<jsonSpace::PosPair> returnvalue;
 
-				for (auto i = AllStartSymbol.begin(); i != AllStartSymbol.end(); ) {
+				for (auto i = AllStartSymbolRaw.begin(); i != AllStartSymbolRaw.end(); i++) {
 					if (isInsideStr(*i)) {
-						i = AllStartSymbol.erase(i);
 						continue;
 					}
-					i++;
+					AllStartSymbol.emplace_back(std::move(*i));
 				}
-				for (auto i = AllEndSymbol.begin(); i != AllEndSymbol.end(); ) {
+				for (auto i = AllEndSymbolRaw.begin(); i != AllEndSymbolRaw.end(); i++) {
 					if (isInsideStr(*i)) {
-						i = AllEndSymbol.erase(i);
 						continue;
 					}
-					i++;
+					AllEndSymbol.emplace_back(std::move(*i));
 				}
 
 				if (!jsonSpace::SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);//判断开始符号和结束符号数量是否一样				
@@ -692,11 +717,11 @@ namespace DC {
 			inline void clear_except_rawStr() {
 				if (!StringSymbolPair.empty()) StringSymbolPair.clear();
 				if (!ObjectSymbolPair.empty()) ObjectSymbolPair.clear();
-				//if (!ArraySymbolPair.empty()) ArraySymbolPair.clear();
+				if (!ArraySymbolPair.empty()) ArraySymbolPair.clear();
 			}
 
 		private:
-			std::vector<jsonSpace::PosPair> ObjectSymbolPair, StringSymbolPair;
+			std::vector<jsonSpace::PosPair> ObjectSymbolPair, ArraySymbolPair, StringSymbolPair;
 		};
 
 		class object final :public jsonSpace::base {
@@ -773,7 +798,7 @@ namespace DC {
 				auto findResult = findResult_Full.getplace_ref();
 				//判断key在本层（既不在字符串内，又不在其它对象内）
 				for (auto i = findResult.begin(); i != findResult.end();) {
-					if (isInsideStr(*i) || isInsideObj(*i)) {
+					if (isInsideStr(*i) || isInsideObj(*i) || isInsideArr(*i)) {
 						i = findResult.erase(i);
 						continue;
 					}
@@ -806,24 +831,24 @@ namespace DC {
 				switch (rawStr[startpos]) {
 				case '{': {
 					for (const auto& p : ObjectSymbolPair) {
-						if (std::get<0>(p) == startpos) {
-							endpos = std::get<1>(p) + 1;
+						if (p.first == startpos) {
+							endpos = p.second + 1;
 							break;
 						}
 					}
 				}break;
 				case '[': {
 					for (const auto& p : ArraySymbolPair) {
-						if (std::get<0>(p) == startpos) {
-							endpos = std::get<1>(p) + 1;
+						if (p.first == startpos) {
+							endpos = p.second + 1;
 							break;
 						}
 					}
 				}break;
 				case '\"': {
 					for (const auto& p : StringSymbolPair) {
-						if (std::get<0>(p) == startpos) {
-							endpos = std::get<1>(p) + 1;
+						if (p.first == startpos) {
+							endpos = p.second + 1;
 							break;
 						}
 					}
@@ -886,7 +911,7 @@ namespace DC {
 				bool flag = false;
 
 				for (auto i = rawStr.begin(); i != rawStr.end(); i++) {
-					if (*i == '{' || *i == '[') {
+					if (*i == '{') {
 						rawStr.erase(i);
 						flag = true;
 						break;
@@ -896,7 +921,7 @@ namespace DC {
 				if (flag != true) return;
 
 				for (auto i = rawStr.rbegin(); i != rawStr.rend(); i++) {
-					if (*i == '}' || *i == ']') {
+					if (*i == '}') {
 						rawStr.erase(--i.base());
 						flag = false;
 						break;
@@ -911,7 +936,7 @@ namespace DC {
 				try {
 					StringSymbolPair = this->getStringSymbolPair(rawStr);
 					ObjectSymbolPair = getSymbolPair("{", "}");
-					ArraySymbolPair = getSymbolPair("[", "]");
+					ArraySymbolPair = getSymbolPair("[", "]");					
 				}
 				catch (const DC::DC_ERROR& ex) {
 					clear_except_rawStr();
@@ -922,14 +947,21 @@ namespace DC {
 		private:
 			bool isInsideStr(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
 				for (const auto& p : StringSymbolPair) {
-					if (input > std::get<0>(p) && input < std::get<1>(p)) return true;
+					if (input > p.first && input < p.second) return true;
 				}
 				return false;
 			}
 
 			bool isInsideObj(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
 				for (const auto& p : ObjectSymbolPair) {
-					if (input > std::get<0>(p) && input < std::get<1>(p)) return true;
+					if (input > p.first && input < p.second) return true;
+				}
+				return false;
+			}
+
+			bool isInsideArr(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
+				for (const auto& p : ArraySymbolPair) {
+					if (input > p.first && input < p.second) return true;
 				}
 				return false;
 			}
@@ -952,22 +984,22 @@ namespace DC {
 			}
 
 			std::vector<jsonSpace::PosPair> getSymbolPair(const char* const StartSymbol, const char* const EndSymbol)const {//防止js字符串里的符号影响
-				std::vector<std::size_t> AllStartSymbol = DC::STR::find(rawStr, StartSymbol).getplace_ref(), AllEndSymbol = DC::STR::find(rawStr, EndSymbol).getplace_ref();
+				std::vector<std::size_t> AllStartSymbolRaw = DC::STR::find(rawStr, StartSymbol).getplace_ref(), AllEndSymbolRaw = DC::STR::find(rawStr, EndSymbol).getplace_ref();
+				std::vector<std::size_t> AllStartSymbol, AllEndSymbol;
 				std::vector<jsonSpace::PosPair> returnvalue;
 
-				for (auto i = AllStartSymbol.begin(); i != AllStartSymbol.end(); ) {
+				for (auto i = AllStartSymbolRaw.begin(); i != AllStartSymbolRaw.end(); i++) {
+					auto ll = isInsideStr(*i);
 					if (isInsideStr(*i)) {
-						i = AllStartSymbol.erase(i);
 						continue;
 					}
-					i++;
+					AllStartSymbol.emplace_back(std::move(*i));
 				}
-				for (auto i = AllEndSymbol.begin(); i != AllEndSymbol.end(); ) {
+				for (auto i = AllEndSymbolRaw.begin(); i != AllEndSymbolRaw.end(); i++) {
 					if (isInsideStr(*i)) {
-						i = AllEndSymbol.erase(i);
 						continue;
 					}
-					i++;
+					AllEndSymbol.emplace_back(std::move(*i));
 				}
 
 				if (!jsonSpace::SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);//判断开始符号和结束符号数量是否一样				

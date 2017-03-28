@@ -7,8 +7,9 @@
 #include <algorithm>
 #include <sstream>
 #include "DC_ERROR.h"
-//Version 2.4.1V14
-//20170326
+#include "DC_type.h"
+//Version 2.4.1V16
+//20170328
 
 namespace DC {
 
@@ -224,7 +225,7 @@ namespace DC {
 			return TEMP_str;
 		}
 
-		inline std::string getSub(const std::string& str, const std::size_t& startpos, const std::size_t& endpos) {//获取子串
+		inline std::string getSub(const std::string& str, const DC::pos_type& startpos, const DC::pos_type& endpos) {//获取子串
 																												   //从startpos+1到endpos-1
 			if (endpos < startpos || endpos>str.size() || endpos < 0) throw DC::DC_ERROR("pos illegal", 0);
 			std::string returnvalue;
