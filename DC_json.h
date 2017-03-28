@@ -7,7 +7,7 @@
 #include "DC_STR.h"
 #include "liuzianglib.h"
 #include "DC_type.h"
-//Version 2.4.1V17
+//Version 2.4.1V18
 //20170328
 
 namespace DC {
@@ -150,23 +150,23 @@ namespace DC {
 				setRawStr(std::move(input));
 			}
 
-			inline bool is_empty() {
+			inline bool is_empty()const {
 				return rawStr.empty();
 			}
 
-			object& as_object();
+			object& as_object()const;
 
 			object&& to_object();
 
-			value& as_value();
+			value& as_value()const;
 
 			value&& to_value();
 
-			number& as_number();
+			number& as_number()const;
 
 			number&& to_number();
 
-			array& as_array();
+			array& as_array()const;
 
 			array&& to_array();
 
@@ -894,11 +894,11 @@ namespace DC {
 				}
 			}
 
-			inline bool empty() {
+			inline bool is_empty()const {
 				return ObjectSymbolPair.empty();
 			}
 
-			inline size_type size() {
+			inline size_type size()const {
 				return ObjectSymbolPair.size();
 			}
 
@@ -977,7 +977,7 @@ namespace DC {
 			delete &m_value;
 		}
 
-		object& transparent::as_object() {
+		object& transparent::as_object()const {
 			m_object.set(rawStr);
 			return m_object;
 		}
@@ -987,7 +987,7 @@ namespace DC {
 			return std::move(m_object);
 		}
 
-		value& transparent::as_value() {
+		value& transparent::as_value()const {
 			m_value.set(rawStr);
 			return m_value;
 		}
@@ -997,7 +997,7 @@ namespace DC {
 			return std::move(m_value);
 		}
 
-		number& transparent::as_number() {
+		number& transparent::as_number()const {
 			m_number.set(rawStr);
 			return m_number;
 		}
@@ -1007,7 +1007,7 @@ namespace DC {
 			return std::move(m_number);
 		}
 
-		array& transparent::as_array() {
+		array& transparent::as_array()const {
 			m_array.set(rawStr);
 			return m_array;
 		}
