@@ -7,7 +7,7 @@
 #include "DC_STR.h"
 #include "liuzianglib.h"
 #include "DC_type.h"
-//Version 2.4.1V19
+//Version 2.4.1V20
 //20170329
 
 namespace DC {
@@ -26,9 +26,14 @@ namespace DC {
 
 			typedef std::vector<PosPair> ObjTable;
 
-			inline bool comparePosPair(const PosPair& input0, const PosPair& input1) {//比较两个PosPair的开始位置
+			inline bool comparePosPairfirst(const PosPair& input0, const PosPair& input1) {//比较两个PosPair的开始位置
 																					  //sort时使用，较小的排在前面
 				return input0.first < input1.first;
+			}
+
+			inline bool comparePosPairsecond(const PosPair& input0, const PosPair& input1) {//比较两个PosPair的结束位置
+																						   //sort时使用，较小的排在前面
+				return input0.second < input1.second;
 			}
 
 			inline bool SybolValid(const std::vector<std::size_t>& AllStartSymbol, const std::vector<std::size_t>& EndStartSymbol) {//判断开始符号和结束符号数量是否一样
@@ -276,14 +281,15 @@ namespace DC {
 			inline std::string as_string()const {
 				if (!is_string())
 					throw DC::DC_ERROR("value::as_string", "can not as string", 0);
-				return rawStr;
+				return DC::STR::replace(rawStr, DC::STR::find(rawStr, "\\\""), "\"");
 			}
 
 			inline std::string to_string() {
 				if (!is_string())
 					throw DC::DC_ERROR("value::as_string", "can not as string", 0);
 				isStr = false;
-				return std::string(std::move(rawStr));
+				auto temp = std::move(rawStr);
+				return DC::STR::replace(temp, DC::STR::find(temp, "\\\""), "\"");
 			}
 
 		protected:
@@ -731,19 +737,19 @@ namespace DC {
 		protected:
 			bool isInsideStr(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
 				for (const auto& p : StringSymbolPair) {
-					if (input < p.first || input > p.second) return false;
+					if (input > p.first && input < p.second) return true;
 				}
-				return true;
+				return false;
 			}
 
-			bool isInsideObj(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
+			bool isInsideObj(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
 				for (const auto& p : ObjectSymbolPair) {
 					if (input > p.first && input < p.second) return true;
 				}
 				return false;
 			}
 
-			bool isInsideArr(const std::size_t& input)const {//input位置是否在js字符串（不是js用户字符串）内
+			bool isInsideArr(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
 				for (const auto& p : ArraySymbolPair) {
 					if (input > p.first && input < p.second) return true;
 				}
@@ -758,7 +764,7 @@ namespace DC {
 				std::vector<jsonSpace::PosPair> returnvalue;
 
 				if (AllSymbol.size() % 2 != 0)
-					throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);
+					throw DC::DC_ERROR("invalid string", "string symbols \"\" can not be paired", 0);
 				while (!AllSymbol.empty()) {
 					returnvalue.emplace_back(*AllSymbol.begin(), *(AllSymbol.begin() + 1));
 					AllSymbol.erase(AllSymbol.begin());
@@ -773,7 +779,6 @@ namespace DC {
 				std::vector<jsonSpace::PosPair> returnvalue;
 
 				for (auto i = AllStartSymbolRaw.begin(); i != AllStartSymbolRaw.end(); i++) {
-					auto ll = isInsideStr(*i);
 					if (isInsideStr(*i)) {
 						continue;
 					}
@@ -786,7 +791,8 @@ namespace DC {
 					AllEndSymbol.emplace_back(std::move(*i));
 				}
 
-				if (!jsonSpace::SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);//判断开始符号和结束符号数量是否一样				
+				//注释掉这行是因为 JSON 字符串内允许{}和[]
+				//if (!jsonSpace::SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);//判断开始符号和结束符号数量是否一样				
 																																			   //这个算法核心在于“距离AllStartSymbol中的最后一个元素最近且在其后的AllEndSymbol元素必然可以与之配对”。
 				for (auto i = AllStartSymbol.rbegin(); i != AllStartSymbol.rend(); i = AllStartSymbol.rbegin()) {
 					std::size_t minimal = INT_MAX;//int类型最大值
@@ -795,7 +801,7 @@ namespace DC {
 						if ((!(*i2 < *i)) && (*i2 - *i) < minimal) { minimal = *i2 - *i; iter = i2; }//找出和当前开始符号最近的结束符号
 					}
 					if (iter == AllEndSymbol.end())
-						throw DC::DC_ERROR("undefined behavior", 0);//理论上应该不会抛出。。。
+						throw DC::DC_ERROR("undefined behavior", 0);//理论上应该不会抛出，除非放进来的字符串不符合语法
 					returnvalue.emplace_back(*i, *iter);
 					AllStartSymbol.erase(--i.base());
 					AllEndSymbol.erase(iter);
