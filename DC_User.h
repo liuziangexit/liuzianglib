@@ -4,8 +4,8 @@
 #include "liuzianglib.h"
 #include "DC_MySQL.h"
 #include "DC_ERROR.h"
-//Version 2.4.1V10
-//20170323
+//Version 2.4.2
+//20170330
 
 namespace DC {
 

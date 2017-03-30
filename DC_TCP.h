@@ -5,8 +5,8 @@
 #include <string>
 #include <memory>
 #pragma comment(lib, "ws2_32.lib")
-//Version 2.4.1V10
-//20170323
+//Version 2.4.2
+//20170330
 //注意:DC_TCP.h必须先于DC_MySQL.h包含
 
 namespace DC {

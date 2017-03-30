@@ -3,8 +3,8 @@
 #define liuzianglib_File
 #include <string>
 #include "DC_ERROR.h"
-//Version 2.4.1V16
-//20170328
+//Version 2.4.2
+//20170330
 
 #define ERROR_CANTOPENFILE DC::DC_ERROR(filename,"CAN NOT OPEN FILE", -1)
 #define ERROR_CANTGETSIZE DC::DC_ERROR(filename,"CAN NOT GET FILE SIZE", -1)

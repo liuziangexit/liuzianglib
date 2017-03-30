@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_var.h"
-//Version 2.4.1V10
-//20170323
+//Version 2.4.2
+//20170330
 
 #define GET_FIRST_PARAMETERS 0//适用于GetCommandLineParameters
 
@@ -16,6 +16,7 @@ namespace DC {
 	typedef std::vector<DC::var> ARGS_V;
 
 	static inline int32_t randomer(int32_t s, int32_t b) {//生成介于s和b之间的随机数(包括s与b)
+		                                                  //并没有内存泄漏，因为重复调用没有占用更多的内存
 		std::random_device rd;
 		std::mt19937 gen(rd());
 		std::uniform_int_distribution<> dis(s, b);
