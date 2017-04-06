@@ -7,8 +7,8 @@
 #include "DC_STR.h"
 #include "liuzianglib.h"
 #include "DC_type.h"
-//Version 2.4.2
-//20170330
+//Version 2.4.2V2
+//20170406
 
 namespace DC {
 
@@ -84,7 +84,7 @@ namespace DC {
 			protected:
 				template<typename T>
 				inline void setRawStr(T&& input)noexcept {
-					static_assert(std::is_same<std::string, std::decay<T>::type>::value, "input type should be std::string");
+					static_assert(std::is_same<std::string, typename std::decay<T>::type>::value, "input type should be std::string");
 					rawStr = std::forward<T>(input);
 				}
 
