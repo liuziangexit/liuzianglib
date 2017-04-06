@@ -6,7 +6,7 @@
 #include <memory>
 #include <typeindex>
 #include "DC_ERROR.h"
-//Version 2.4.2V2
+//Version 2.4.2V3
 //20170406
 
 namespace DC {
@@ -21,7 +21,7 @@ namespace DC {
 
 		Any(const Any& that) : m_ptr(that.Clone()), m_tpIndex(that.m_tpIndex) {}
 
-		Any(Any && that)noexcept : m_ptr(std::move(that.m_ptr)), m_tpIndex(that.m_tpIndex) {
+		Any(Any&& that)noexcept : m_ptr(std::move(that.m_ptr)), m_tpIndex(that.m_tpIndex) {
 			that.m_tpIndex = typeid(void);
 		}
 
@@ -62,10 +62,9 @@ namespace DC {
 		inline U& get()const {
 			if (m_tpIndex != typeid(U))
 				throw DC::DC_ERROR("Any::get()", std::string("can not cast ") + m_tpIndex.name() + " to " + typeid(U).name(), 0);
-			auto derived = dynamic_cast<Derived<U>*> (m_ptr.get());
-			return derived->m_value;
+			return dynamic_cast<Derived<U>*> (m_ptr.get())->m_value;
 		}
-		
+
 	private:
 		struct Base;
 		typedef std::unique_ptr<Base> BasePtr;
@@ -102,7 +101,7 @@ namespace DC {
 				return m_ptr->Clone();
 			return nullptr;
 		}
-		
+
 	private:
 		BasePtr m_ptr;
 		std::type_index m_tpIndex;
