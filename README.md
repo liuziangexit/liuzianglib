@@ -6,7 +6,7 @@
         <a href="https://liuziangexit.com/liuzianglib/DC_file">文件操作</a><br>
         <a href="https://liuziangexit.com/liuzianglib/DC_ThreadPool">线程池</a>(修改自 <a href="https://github.com/ufownl/simple_thread_pool">游侠UFO</a>)<br>
         <a href="https://liuziangexit.com/liuzianglib/DC_TypeInfo">Type Traits</a><br>
-        <a href="https://liuziangexit.com/liuzianglib/DC_var">通用数据类型</a><br>
+        <a href="https://liuziangexit.com/liuzianglib/DC_GenericType">通用数据类型</a><br>
         <a href="https://liuziangexit.com/liuzianglib/DC_DC_ERROR">异常信息</a><br>
         <a href="https://liuziangexit.com/liuzianglib/DC_DC_MySQL">MySQL API 的面向对象封装</a><br>
         <a href="https://liuziangexit.com/liuzianglib/DC_TCP">WinSock2 封装</a><br>
