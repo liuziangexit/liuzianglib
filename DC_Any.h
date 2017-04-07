@@ -6,8 +6,8 @@
 #include <memory>
 #include <typeindex>
 #include "DC_ERROR.h"
-//Version 2.4.2V3
-//20170406
+//Version 2.4.2V4
+//20170407
 
 namespace DC {
 	
@@ -40,6 +40,13 @@ namespace DC {
 			m_ptr = std::move(input.m_ptr);
 			m_tpIndex = input.m_tpIndex;
 			input.m_tpIndex = typeid(void);
+			return *this;
+		}
+
+		template<typename T>
+		Any& operator=(T&& input) {
+			m_ptr.reset(new Derived<typename std::decay<T>::type>(std::forward<T>(input)));
+			m_tpIndex = typeid(typename std::decay<T>::type);
 			return *this;
 		}
 

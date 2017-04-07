@@ -4,16 +4,16 @@
 #include <iostream>
 #include <random>
 #include <queue>
-#include "DC_var.h"
-//Version 2.4.2
-//20170330
+#include "DC_Any.h"
+//Version 2.4.2V4
+//20170407
 
 #define GET_FIRST_PARAMETERS 0//适用于GetCommandLineParameters
 
 namespace DC {
 
 	typedef std::queue<std::string> PARS_V;
-	typedef std::vector<DC::var> ARGS_V;
+	typedef std::vector<DC::Any> ARGS_V;
 
 	static inline int32_t randomer(int32_t s, int32_t b) {//生成介于s和b之间的随机数(包括s与b)
 		                                                  //并没有内存泄漏，因为重复调用没有占用更多的内存

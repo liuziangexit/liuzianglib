@@ -2,10 +2,11 @@
 #ifndef liuzianglib_User
 #define liuzianglib_User
 #include "liuzianglib.h"
+#include "DC_STR.h"
 #include "DC_MySQL.h"
 #include "DC_ERROR.h"
-//Version 2.4.2
-//20170330
+//Version 2.4.2V4
+//20170407
 
 namespace DC {
 
