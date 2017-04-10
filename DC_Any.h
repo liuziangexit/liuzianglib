@@ -6,8 +6,8 @@
 #include <memory>
 #include <typeindex>
 #include "DC_ERROR.h"
-//Version 2.4.2V4
-//20170407
+//Version 2.4.2V5
+//20170410
 
 namespace DC {
 	
@@ -15,7 +15,7 @@ namespace DC {
 	public:
 		Any(void) : m_tpIndex(typeid(void)) {}
 
-		template<typename U>
+		template<typename U, class = typename std::enable_if<!std::is_same<typename std::decay<U>::type, Any>::value, U>::type>//这一句用了SFINAE方法。原理是当U是Any的时候，第二个class将会无法推导(enable_if条件不成立时将没有成员typename enable_if::type)，从而诱导编译器转向另外两个构造函数
 		Any(U&& value) :
 			m_ptr(new Derived<typename std::decay<U>::type>(std::forward<U>(value))), m_tpIndex(typeid(typename std::decay<U>::type)) {}
 
