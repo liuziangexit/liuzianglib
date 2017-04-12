@@ -7,8 +7,8 @@
 #include "DC_STR.h"
 #include "liuzianglib.h"
 #include "DC_type.h"
-//Version 2.4.2V2
-//20170406
+//Version 2.4.2V6
+//20170412
 
 namespace DC {
 
@@ -27,12 +27,12 @@ namespace DC {
 			typedef std::vector<PosPair> ObjTable;
 
 			inline bool comparePosPairfirst(const PosPair& input0, const PosPair& input1) {//比较两个PosPair的开始位置
-																					  //sort时使用，较小的排在前面
+																						   //sort时使用，较小的排在前面
 				return input0.first < input1.first;
 			}
 
 			inline bool comparePosPairsecond(const PosPair& input0, const PosPair& input1) {//比较两个PosPair的结束位置
-																						   //sort时使用，较小的排在前面
+																							//sort时使用，较小的排在前面
 				return input0.second < input1.second;
 			}
 
@@ -119,7 +119,7 @@ namespace DC {
 
 		class transparent final :public jsonSpace::base {
 		public:
-			transparent();
+			transparent::transparent() = default;
 
 			transparent(const transparent&);
 
@@ -128,8 +128,6 @@ namespace DC {
 			transparent(const std::string&);
 
 			transparent(std::string&&);
-
-			virtual ~transparent()override;//说找不到定义不管
 
 		public:
 			transparent& operator=(const transparent& input) {
@@ -159,19 +157,19 @@ namespace DC {
 				return rawStr.empty();
 			}
 
-			object& as_object()const;
+			object& as_object();
 
 			object&& to_object();
 
-			value& as_value()const;
+			value& as_value();
 
 			value&& to_value();
 
-			number& as_number()const;
+			number& as_number();
 
 			number&& to_number();
 
-			array& as_array()const;
+			array& as_array();
 
 			array&& to_array();
 
@@ -181,10 +179,20 @@ namespace DC {
 			virtual inline void refresh()noexcept {}
 
 		private:
-			value& m_value;
-			number& m_number;
-			array& m_array;
-			object& m_object;
+			template<typename T>
+			T& as_something() {
+				ptr.reset(new T(rawStr));
+				return *reinterpret_cast<T*>(ptr.get());
+			}
+
+			template<typename T>
+			T&& to_something() {
+				ptr.reset(new T(std::move(rawStr)));
+				return std::move(*reinterpret_cast<T*>(ptr.get()));
+			}
+
+		private:
+			std::unique_ptr<jsonSpace::base> ptr;
 		};
 
 		class value final :public jsonSpace::base {
@@ -793,7 +801,7 @@ namespace DC {
 
 				//注释掉这行是因为 JSON 字符串内允许{}和[]
 				//if (!jsonSpace::SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);//判断开始符号和结束符号数量是否一样				
-																																			   //这个算法核心在于“距离AllStartSymbol中的最后一个元素最近且在其后的AllEndSymbol元素必然可以与之配对”。
+				//这个算法核心在于“距离AllStartSymbol中的最后一个元素最近且在其后的AllEndSymbol元素必然可以与之配对”。
 				for (auto i = AllStartSymbol.rbegin(); i != AllStartSymbol.rend(); i = AllStartSymbol.rbegin()) {
 					std::size_t minimal = INT_MAX;//int类型最大值
 					auto iter = AllEndSymbol.end();
@@ -820,6 +828,7 @@ namespace DC {
 		};
 
 		class array final :private object {
+			friend class json::transparent;//transparent 里面有个转换需要这样搞
 		public:
 			array() = default;
 
@@ -958,69 +967,52 @@ namespace DC {
 			}
 		};
 
-		transparent::transparent() :m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {}
-
-		transparent::transparent(const transparent& input) : m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+		transparent::transparent(const transparent& input) {
 			setRawStr(input.rawStr);
 		}
 
-		transparent::transparent(transparent&& input)noexcept : m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+		transparent::transparent(transparent&& input)noexcept {
 			setRawStr(std::move(input.rawStr));
 		}
 
-		transparent::transparent(const std::string& input) : m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+		transparent::transparent(const std::string& input) {
 			set(input);
 		}
 
-		transparent::transparent(std::string&& input) : m_object(*(new object)), m_value(*(new value)), m_array(*(new array)), m_number(*(new number)) {
+		transparent::transparent(std::string&& input) {
 			set(std::move(input));
 		}
 
-		transparent::~transparent()noexcept {
-			delete &m_array;
-			delete &m_number;
-			delete &m_object;
-			delete &m_value;
+		inline object& transparent::as_object() {
+			return as_something<json::object>();
 		}
 
-		object& transparent::as_object()const {
-			m_object.set(rawStr);
-			return m_object;
+		inline object&& transparent::to_object() {
+			return to_something<json::object>();
 		}
 
-		object&& transparent::to_object() {
-			m_object.set(std::move(rawStr));
-			return std::move(m_object);
+		inline value& transparent::as_value() {
+			return as_something<json::value>();
 		}
 
-		value& transparent::as_value()const {
-			m_value.set(rawStr);
-			return m_value;
+		inline value&& transparent::to_value() {
+			return to_something<json::value>();
 		}
 
-		value&& transparent::to_value() {
-			m_value.set(std::move(rawStr));
-			return std::move(m_value);
+		inline number& transparent::as_number() {
+			return as_something<json::number>();
 		}
 
-		number& transparent::as_number()const {
-			m_number.set(rawStr);
-			return m_number;
+		inline number&& transparent::to_number() {
+			return to_something<json::number>();
 		}
 
-		number&& transparent::to_number() {
-			m_number.set(std::move(rawStr));
-			return std::move(m_number);
+		inline array& transparent::as_array() {
+			return as_something<json::array>();
 		}
 
-		array& transparent::as_array()const {
-			m_array.set(rawStr);
-			return m_array;
-		}
-
-		array&& transparent::to_array() {
-			m_array.set(std::move(rawStr));
-			return std::move(m_array);
+		inline array&& transparent::to_array() {
+			return to_something<json::array>();
 		}
 
 	}
