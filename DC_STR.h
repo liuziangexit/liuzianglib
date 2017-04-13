@@ -8,8 +8,8 @@
 #include <sstream>
 #include "DC_ERROR.h"
 #include "DC_type.h"
-//Version 2.4.2
-//20170330
+//Version 2.4.2V8
+//20170413
 
 namespace DC {
 
@@ -73,25 +73,6 @@ namespace DC {
 				return returnvalue;
 			}
 
-			class SetLocal final {//使用时请注意:一个作用域内只能出现一个SetLocal对象，否则析构顺序可能不确定，导致最终local没有被设置回默认的，依然是chs
-								  //因为语法问题无法做到ReplaceInfo那样的语法层面单例模式
-			public:
-				SetLocal() :curLocale(setlocale(LC_ALL, NULL)) {
-					setlocale(LC_ALL, "chs");
-				}
-
-				~SetLocal() {
-					setlocale(LC_ALL, curLocale.c_str());
-				}
-
-				SetLocal(const SetLocal&) = delete;
-
-				SetLocal& operator=(const SetLocal&) = delete;
-
-			private:
-				std::string curLocale;
-			};
-
 			class ReplaceInfo final {
 			public:
 				ReplaceInfo() = default;
@@ -136,6 +117,24 @@ namespace DC {
 			private:
 				std::vector<std::size_t> whererp;
 				std::size_t bei_ti_huan_howlong;
+			};
+
+			class SetLocal final {
+			public:
+				SetLocal() :curLocale(setlocale(LC_ALL, NULL)) {
+					setlocale(LC_ALL, "chs");
+				}
+
+				~SetLocal() {
+					setlocale(LC_ALL, curLocale.c_str());
+				}
+
+				SetLocal(const SetLocal&) = delete;
+
+				SetLocal& operator=(const SetLocal&) = delete;
+
+			private:
+				std::string curLocale;
 			};
 
 		}
@@ -256,15 +255,11 @@ namespace DC {
 		char* toType<char*>(const std::string &str) = delete;
 
 		template <>
-		std::wstring toType<std::wstring>(const std::string& s) {//多线程使用这个必须加锁
-			STRSpace::SetLocal sl;
-			const char* _Source = s.c_str();
-			size_t _Dsize = s.size() + 1;
-			std::unique_ptr<wchar_t[]> _Dest(new wchar_t[_Dsize]);
-			wmemset(_Dest.get(), NULL, _Dsize);
-			mbstowcs(_Dest.get(), _Source, _Dsize);
-			std::wstring result = _Dest.get();
-			return result;
+		std::wstring toType<std::wstring>(const std::string& s) {
+			std::unique_ptr<wchar_t[]> toWide(new wchar_t[s.size() + 1]);
+			STRSpace::SetLocal setlocal;
+			mbstowcs(toWide.get(), s.c_str(), s.size() + 1);
+			return std::wstring(toWide.get());
 		}
 
 		template <class T>
@@ -279,15 +274,11 @@ namespace DC {
 		}
 
 		template <>
-		std::string toString<std::wstring>(const std::wstring& ws) {//多线程使用这个必须加锁
-			STRSpace::SetLocal sl;
-			const wchar_t* _Source = ws.c_str();
-			size_t _Dsize = 2 * ws.size() + 1;
-			std::unique_ptr<char[]> _Dest(new char[_Dsize]);
-			memset(_Dest.get(), NULL, _Dsize);
-			wcstombs(_Dest.get(), _Source, _Dsize);
-			std::string result = _Dest.get();
-			return result;
+		std::string toString<std::wstring>(const std::wstring& ws) {
+			std::unique_ptr<char[]> toStr(new char[ws.size() + 1]);
+			STRSpace::SetLocal setlocal;
+			wcstombs(toStr.get(), ws.c_str(), ws.size() + 1);
+			return std::string(toStr.get());
 		}
 
 	}
