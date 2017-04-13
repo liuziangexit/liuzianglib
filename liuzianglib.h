@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.2V4
-//20170407
+//Version 2.4.2V9
+//20170413
 
 #define GET_FIRST_PARAMETERS 0//适用于GetCommandLineParameters
 
@@ -116,29 +116,37 @@ namespace DC {
 	}
 
 	class KeyValuePair {//储存单个名值对
+		                //要设定分隔符，请从此类派生并重写 isSeparator 虚函数
 	public:
-		KeyValuePair() :OK(false), separator('=') {}
+		KeyValuePair() :OK(false) {}
 
-		KeyValuePair(const std::string& input) :OK(false), separator('=') {
-			Set(input);
+		KeyValuePair(const KeyValuePair&) = default;
+
+		KeyValuePair(KeyValuePair&& input) :name(std::move(input.name)), value(std::move(input.value)), OK(input.OK) {
+			input.OK = false;
 		}
 
-		KeyValuePair(std::string&& input) :OK(false), separator('=') {
-			auto temp = std::move(input);
-			Set(temp);
+		virtual ~KeyValuePair()noexcept = default;
+
+	public:
+		KeyValuePair& operator=(const KeyValuePair&) = default;
+
+		KeyValuePair& operator=(KeyValuePair&& input) {
+			name = std::move(input.name);
+			value = std::move(input.value);
+			OK = input.OK;
+			input.OK = false;
+			return *this;
 		}
 
-		void SetSeparator(const char& input) {
-			separator = input;
-		}
-
+	public:		
 		void Set(const std::string& input) {
 			bool OKflag = false;
 			std::size_t whereis = 0;
 
 			//找分隔符位置
 			for (const auto& p : input) {
-				if (p == separator) {
+				if (isSeparator(p)) {
 					OKflag = true;
 					break;
 				}
@@ -157,21 +165,25 @@ namespace DC {
 			OK = true;
 		}
 
-		bool isSetOK()const {
+		inline bool isSetOK()const {
 			return OK;
 		}
 
-		std::string GetName()const {
+		inline std::string GetName()const {
 			return name;
 		}
 
-		std::string GetValue()const {
+		inline std::string GetValue()const {
 			return value;
 		}
 
-	private:
+		virtual inline char GetSeparator()const noexcept = 0;
+
+	protected:
+		virtual inline bool isSeparator(const char& ch)const noexcept = 0;
+
+	protected:
 		bool OK;
-		char separator;
 		std::string name, value;
 	};
 
