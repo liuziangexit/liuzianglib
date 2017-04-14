@@ -6,8 +6,8 @@
 #include <vector>
 #include <string>
 #include <cctype>
-//Version 2.4.2V11
-//20170414
+//Version 2.4.2V12
+//20170415
 
 namespace DC {
 
@@ -68,7 +68,7 @@ namespace DC {
 					return false;
 				}
 			};
-			
+
 			const char* getSC(const http::status_code& input) {
 				if (input == 200) { return "200 OK"; }
 				if (input == 400) { return "400 Bad Request"; }
@@ -81,7 +81,7 @@ namespace DC {
 			}
 
 		}
-		
+
 		class title final {
 			friend class request;
 			friend class response;
@@ -153,6 +153,19 @@ namespace DC {
 				}
 				if (rv.empty()) throw DC::DC_ERROR("GetStatusCode", "there's no number in string \"other\"", 0);
 				return DC::STR::toType<int32_t>(rv);
+			}
+
+			inline void SetURI(const std::string& input) {//放到第一个空格之后，空格不够抛异常
+				auto frs = DC::STR::find(other, " ");
+				if (frs.getplace_ref().empty()) throw DC::DC_ERROR("SetURI", "space is not enough", 0);
+				auto before = DC::STR::getSub(other, -1, *frs.getplace_ref().begin());
+				other = before + " " + input;
+			}
+
+			inline std::string GetURI()const {//返回第一个空格到结尾之间的东西，如果空格不够抛异常。
+				auto frs = DC::STR::find(other, " ");
+				if (frs.getplace_ref().empty()) throw DC::DC_ERROR("GetURI", "space is not enough", 0);
+				return DC::STR::getSub(other, *frs.getplace_ref().begin(), other.size());
 			}
 		};
 
@@ -263,7 +276,7 @@ namespace DC {
 					return m_title;
 				}
 
-				inline const http::headers& Headers()const {
+				inline http::headers& Headers() {
 					return m_headers;
 				}
 
@@ -333,7 +346,7 @@ namespace DC {
 
 
 		}
-		
+
 		class request final :public httpSpace::base {
 		public:
 			request() = default;
@@ -355,9 +368,17 @@ namespace DC {
 			inline method Method() {
 				return m_title.GetMethod();
 			}
+
+			inline void setURI(const std::string& input) {
+				m_title.SetURI(input);
+			}
+
+			inline std::string URI() {
+				return m_title.GetURI();
+			}
 		};
 
-		class response final :httpSpace::base {
+		class response final :public httpSpace::base {
 		public:
 			response() = default;
 
