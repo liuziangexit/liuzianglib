@@ -6,12 +6,40 @@
 #include <vector>
 #include <string>
 #include <cctype>
-//Version 2.4.2V10
+//Version 2.4.2V11
 //20170414
 
 namespace DC {
 
 	namespace http {
+
+		class request;
+		class response;
+		class headers;
+
+		using body = std::string;
+		using method = const std::string;
+		using status_code = const unsigned short;
+
+		namespace methods {
+
+			static http::method GET = "GET";
+			static http::method POST = "POST";
+			static http::method HEAD = "HEAD";
+
+		}
+
+		namespace status_codes {
+
+			static http::status_code OK = 200;
+			static http::status_code BadRequest = 400;
+			static http::status_code Forbidden = 403;
+			static http::status_code NotFound = 404;
+			static http::status_code MethodNotAllowed = 405;
+			static http::status_code InternalError = 500;
+			static http::status_code ServiceUnavailable = 503;
+
+		}
 
 		namespace httpSpace {
 
@@ -40,16 +68,23 @@ namespace DC {
 					return false;
 				}
 			};
+			
+			const char* getSC(const http::status_code& input) {
+				if (input == 200) { return "200 OK"; }
+				if (input == 400) { return "400 Bad Request"; }
+				if (input == 403) { return "403 Forbidden"; }
+				if (input == 404) { return "404 Not Found"; }
+				if (input == 405) { return "405 Method Not Allowed"; }
+				if (input == 500) { return "500 Internal Error"; }
+				if (input == 503) { return "503 Service Unavailable"; }
+				throw DC::DC_ERROR("getSC", "unknown status code", 0);
+			}
 
 		}
-
-		class request;
-		class response;
-		class headers;
-
-		using body = std::string;
-
+		
 		class title final {
+			friend class request;
+			friend class response;
 		public:
 			title() = default;
 
@@ -86,6 +121,38 @@ namespace DC {
 		private:
 			inline std::string GetVersionStr()const noexcept {
 				return "HTTP/" + version;
+			}
+
+			inline void SetMethod(const http::method& input) {//把method字符串放入第一个空格之前（替换掉原有的第一个空格之前的字符串），如果没有第一个空格，则把method放入开头，然后加空格，然后加原来的other的内容
+				std::size_t loca = 0;
+				for (; loca < other.size(); loca++) {
+					if (other[loca] == ' ') break;
+				}
+				if (loca == other.size()) { other = input + " " + other; return; }
+				other = input + DC::STR::getSub(other, loca - 1, other.size());
+			}
+
+			inline method GetMethod()const {//返回other里第一个空格之前的子串，如果没有则抛异常
+				std::string method_str;
+				for (const auto& p : other) {
+					if (p != ' ') { method_str.push_back(p); continue; }
+					break;
+				}
+				if (method_str.empty()) throw DC::DC_ERROR("GetMethod", "can't get method", 0);
+				return method_str;
+			}
+
+			inline void SetStatusCode(const http::status_code& input) {
+				other = httpSpace::getSC(input);
+			}
+
+			inline http::status_code GetStatusCode()const {
+				std::string rv;
+				for (const auto& p : other) {
+					if (std::isdigit(p)) rv.push_back(p);
+				}
+				if (rv.empty()) throw DC::DC_ERROR("GetStatusCode", "there's no number in string \"other\"", 0);
+				return DC::STR::toType<int32_t>(rv);
 			}
 		};
 
@@ -192,6 +259,18 @@ namespace DC {
 					m_body = std::forward<T>(input);
 				}
 
+				inline const http::title& Title()const {
+					return m_title;
+				}
+
+				inline const http::headers& Headers()const {
+					return m_headers;
+				}
+
+				inline const http::body& Body()const {
+					return m_body;
+				}
+
 				virtual std::string toStr()const = 0;
 
 			protected:
@@ -252,9 +331,10 @@ namespace DC {
 				return rv;
 			}
 
-		}
 
-		class request :public httpSpace::base {
+		}
+		
+		class request final :public httpSpace::base {
 		public:
 			request() = default;
 
@@ -267,9 +347,17 @@ namespace DC {
 			virtual inline std::string toStr()const override {
 				return m_title.toStr<request>() + '\n' + m_headers.toStr() + httpSpace::emptyline + m_body;
 			}
+
+			inline void setMethod(const http::method& input) {
+				m_title.SetMethod(input);
+			}
+
+			inline method Method() {
+				return m_title.GetMethod();
+			}
 		};
 
-		class response :httpSpace::base {
+		class response final :httpSpace::base {
 		public:
 			response() = default;
 
@@ -281,6 +369,14 @@ namespace DC {
 		public:
 			virtual inline std::string toStr()const override {
 				return m_title.toStr<response>() + '\n' + m_headers.toStr() + httpSpace::emptyline + m_body;
+			}
+
+			inline void setStatusCode(const http::status_code& input) {
+				m_title.SetStatusCode(input);
+			}
+
+			inline http::status_code StatusCode() {
+				return m_title.GetStatusCode();
 			}
 		};
 
