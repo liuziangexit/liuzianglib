@@ -6,8 +6,8 @@
 #include <vector>
 #include <string>
 #include <cctype>
-//Version 2.4.2V13
-//20170415
+//Version 2.4.2V14
+//20170416
 
 namespace DC {
 
@@ -89,61 +89,61 @@ namespace DC {
 
 			class base;
 
+			class title final {
+				friend class request;
+				friend class response;
+				friend class httpSpace::base;
+			public:
+				title() = default;
+
+				title(const double& inputVersion, const http::method& inputmethod, const std::string& URI) :version(DC::STR::toString(inputVersion)), second(inputmethod), third(URI) {}
+
+				title(const std::string& inputVersion, const std::string& inputmethod, const std::string& URI) :version(inputVersion), second(inputmethod), third(URI) {}
+
+				title(const double& inputVersion, const http::status_code& inputStatusCode) :version(DC::STR::toString(inputVersion)), second(DC::STR::toString(inputStatusCode)), third(httpSpace::getSC(inputStatusCode)) {}
+
+				title(const std::string& inputVersion, const http::status_code& inputStatusCode) :version(inputVersion), second(DC::STR::toString(inputStatusCode)), third(httpSpace::getSC(inputStatusCode)) {}
+
+			public:
+				template<typename T>
+				inline std::string toStr()const;
+
+				template<>
+				inline std::string toStr<DC::http::request>()const {
+					return second + " " + third + " " + GetVersionStr();
+				}
+
+				template<>
+				inline std::string toStr<DC::http::response>()const {
+					return GetVersionStr() + " " + second + " " + third;
+				}
+
+			private:
+				std::string version, second, third;//second:GET\200 third:URI\OK
+
+			private:
+				inline std::string GetVersionStr()const {
+					return "HTTP/" + version;
+				}
+
+				inline std::string& method() {
+					return second;
+				}
+
+				inline std::string& StatusCode() {
+					return second;
+				}
+
+				inline std::string& StatusCodeDes() {
+					return third;
+				}
+
+				inline std::string& URI() {
+					return third;
+				}
+			};
+
 		}
-
-		class title final {
-			friend class request;
-			friend class response;
-			friend class httpSpace::base;
-		public:
-			title() = default;
-
-			title(const double& inputVersion, const http::method& inputmethod, const std::string& URI) :version(DC::STR::toString(inputVersion)), second(inputmethod), third(URI) {}
-
-			title(const std::string& inputVersion, const std::string& inputmethod, const std::string& URI) :version(inputVersion), second(inputmethod), third(URI) {}
-
-			title(const double& inputVersion, const http::status_code& inputStatusCode) :version(DC::STR::toString(inputVersion)), second(DC::STR::toString(inputStatusCode)), third(httpSpace::getSC(inputStatusCode)) {}
-
-			title(const std::string& inputVersion, const http::status_code& inputStatusCode) :version(inputVersion), second(DC::STR::toString(inputStatusCode)), third(httpSpace::getSC(inputStatusCode)) {}
-
-		public:
-			template<typename T>
-			inline std::string toStr()const;
-
-			template<>
-			inline std::string toStr<DC::http::request>()const {
-				return second + " " + third + " " + GetVersionStr();
-			}
-
-			template<>
-			inline std::string toStr<DC::http::response>()const {
-				return GetVersionStr() + " " + second + " " + third;
-			}
-
-		private:
-			std::string version, second, third;//second:GET\200 third:URI\OK
-
-		private:
-			inline std::string GetVersionStr()const {
-				return "HTTP/" + version;
-			}
-
-			inline std::string& method() {
-				return second;
-			}
-
-			inline std::string& StatusCode() {
-				return second;
-			}
-
-			inline std::string& StatusCodeDes() {
-				return third;
-			}
-
-			inline std::string& URI() {
-				return third;
-			}
-		};
 
 		class headers final {
 		public:
@@ -238,7 +238,7 @@ namespace DC {
 
 				inline void setHTTPVersion(const std::string& input) { m_title.version = input; }
 
-				inline http::title& Title() {
+				inline httpSpace::title& Title() {
 					return m_title;
 				}
 
@@ -253,7 +253,7 @@ namespace DC {
 				virtual std::string toStr()const = 0;
 
 			protected:
-				DC::http::title m_title;
+				DC::http::httpSpace::title m_title;
 				headers m_headers;
 				body m_body;
 			};
@@ -269,10 +269,10 @@ namespace DC {
 			}
 
 			template<typename T>
-			http::title title_deserialization(const std::string& input);
+			httpSpace::title title_deserialization(const std::string& input);
 
 			template<>
-			inline http::title title_deserialization<http::request>(const std::string& input) {
+			inline httpSpace::title title_deserialization<http::request>(const std::string& input) {
 				auto loca = DC::STR::find(input, " ");
 				if (loca.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "method not found", 0);
 				auto GetVersionNumStr = [](const std::string& input) {
@@ -286,11 +286,11 @@ namespace DC {
 				auto frs = methodAndURI.find_first_of(' ');
 				if (frs == std::string::npos) throw DC::DC_ERROR("title_deserialization", "space not found", 0);
 
-				return http::title(GetVersionNumStr(DC::STR::getSub(input, *loca.getplace_ref().rbegin(), input.size())), DC::STR::getSub(methodAndURI, -1, frs), DC::STR::getSub(methodAndURI, frs, methodAndURI.size()));
+				return httpSpace::title(GetVersionNumStr(DC::STR::getSub(input, *loca.getplace_ref().rbegin(), input.size())), DC::STR::getSub(methodAndURI, -1, frs), DC::STR::getSub(methodAndURI, frs, methodAndURI.size()));
 			}
 
 			template<>
-			inline http::title title_deserialization<http::response>(const std::string& input) {
+			inline httpSpace::title title_deserialization<http::response>(const std::string& input) {
 				auto loca = DC::STR::find(input, " ");
 				if (loca.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "method not found", 0);
 				auto GetVersionNumStr = [](const std::string& input) {
@@ -302,7 +302,7 @@ namespace DC {
 				};
 				auto frs = DC::STR::find(input, " ");
 				if (frs.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "space not found", 0);
-				return http::title(GetVersionNumStr(DC::STR::getSub(input, -1, *loca.getplace_ref().begin())), (http::status_code)(DC::STR::toType<int32_t>(DC::STR::getSub(input, *frs.getplace_ref().begin(), *frs.getplace_ref().rbegin()))));
+				return httpSpace::title(GetVersionNumStr(DC::STR::getSub(input, -1, *loca.getplace_ref().begin())), (http::status_code)(DC::STR::toType<int32_t>(DC::STR::getSub(input, *frs.getplace_ref().begin(), *frs.getplace_ref().rbegin()))));
 			}
 
 			http::headers headers_deserialization(const std::string& input) {
@@ -316,7 +316,7 @@ namespace DC {
 				rv.add(DC::STR::getSub(input, frs.getplace_ref()[frs.getplace_ref().size() - 1] + 1, input.size()));
 				return rv;
 			}
-			
+
 		}
 
 		class request final :public httpSpace::base {
@@ -386,7 +386,7 @@ namespace DC {
 
 			bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline), input.size());
 
-			return request(title(httpSpace::title_deserialization<request>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
+			return request(httpSpace::title(httpSpace::title_deserialization<request>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
 		}
 
 		response response_deserialization(const std::string& input) {
@@ -402,9 +402,17 @@ namespace DC {
 			if (emptylineLoca.getplace_ref().empty()) throw DC::DC_ERROR("response_deserialization", "emptyline not found", 0);
 			headersraw = DC::STR::getSub(input, titleend + 1, *emptylineLoca.getplace_ref().begin());
 
-			bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().rbegin() + sizeof(httpSpace::emptyline)-1, input.size());
+			bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().rbegin() + sizeof(httpSpace::emptyline) - 1, input.size());
 
-			return response(title(httpSpace::title_deserialization<response>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
+			return response(httpSpace::title(httpSpace::title_deserialization<response>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
+		}
+
+		inline httpSpace::title Set_Version_Statuscode(const double& inputVersion, const http::status_code& inputStatusCode) {
+			return httpSpace::title(inputVersion, inputStatusCode);
+		}
+
+		inline httpSpace::title Set_Version_Method_URI(const double& inputVersion, const http::method& inputmethod, const std::string& inputURI) {
+			return httpSpace::title(inputVersion, inputmethod, inputURI);
 		}
 
 	}
