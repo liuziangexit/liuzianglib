@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.2V9
-//20170413
+//Version 2.4.2V13
+//20170415
 
 #define GET_FIRST_PARAMETERS 0//  ”√”⁄GetCommandLineParameters
 
@@ -169,11 +169,11 @@ namespace DC {
 			return OK;
 		}
 
-		inline std::string GetName()const {
+		virtual inline std::string GetName()const {
 			return name;
 		}
 
-		inline std::string GetValue()const {
+		virtual inline std::string GetValue()const {
 			return value;
 		}
 

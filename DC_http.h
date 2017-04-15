@@ -6,7 +6,7 @@
 #include <vector>
 #include <string>
 #include <cctype>
-//Version 2.4.2V12
+//Version 2.4.2V13
 //20170415
 
 namespace DC {
@@ -43,6 +43,8 @@ namespace DC {
 
 		namespace httpSpace {
 
+			static const char *emptyline = "\r\n\r\n", *nextline = "\r\n";
+
 			class header final :public DC::KeyValuePair {
 			public:
 				header() = default;
@@ -58,8 +60,13 @@ namespace DC {
 				}
 
 			public:
-				virtual inline char GetSeparator()const noexcept {
+				virtual inline char GetSeparator()const noexcept override {
 					return ':';
+				}
+
+				virtual inline std::string GetValue()const override {
+					if (*value.begin() == ' ') return value;
+					return " " + value;
 				}
 
 			protected:
@@ -70,27 +77,34 @@ namespace DC {
 			};
 
 			const char* getSC(const http::status_code& input) {
-				if (input == 200) { return "200 OK"; }
-				if (input == 400) { return "400 Bad Request"; }
-				if (input == 403) { return "403 Forbidden"; }
-				if (input == 404) { return "404 Not Found"; }
-				if (input == 405) { return "405 Method Not Allowed"; }
-				if (input == 500) { return "500 Internal Error"; }
-				if (input == 503) { return "503 Service Unavailable"; }
+				if (input == 200) { return "OK"; }
+				if (input == 400) { return "Bad Request"; }
+				if (input == 403) { return "Forbidden"; }
+				if (input == 404) { return "Not Found"; }
+				if (input == 405) { return "Method Not Allowed"; }
+				if (input == 500) { return "Internal Error"; }
+				if (input == 503) { return "Service Unavailable"; }
 				throw DC::DC_ERROR("getSC", "unknown status code", 0);
 			}
+
+			class base;
 
 		}
 
 		class title final {
 			friend class request;
 			friend class response;
+			friend class httpSpace::base;
 		public:
 			title() = default;
 
-			title(const double& inputVersion, const std::string& inputOther) :version(DC::STR::toString(inputVersion)), other(inputOther) {}
+			title(const double& inputVersion, const http::method& inputmethod, const std::string& URI) :version(DC::STR::toString(inputVersion)), second(inputmethod), third(URI) {}
 
-			title(const std::string& inputVersion, const std::string& inputOther) :version(inputVersion), other(inputOther) {}
+			title(const std::string& inputVersion, const std::string& inputmethod, const std::string& URI) :version(inputVersion), second(inputmethod), third(URI) {}
+
+			title(const double& inputVersion, const http::status_code& inputStatusCode) :version(DC::STR::toString(inputVersion)), second(DC::STR::toString(inputStatusCode)), third(httpSpace::getSC(inputStatusCode)) {}
+
+			title(const std::string& inputVersion, const http::status_code& inputStatusCode) :version(inputVersion), second(DC::STR::toString(inputStatusCode)), third(httpSpace::getSC(inputStatusCode)) {}
 
 		public:
 			template<typename T>
@@ -98,74 +112,36 @@ namespace DC {
 
 			template<>
 			inline std::string toStr<DC::http::request>()const {
-				return other + " " + GetVersionStr();
+				return second + " " + third + " " + GetVersionStr();
 			}
 
 			template<>
 			inline std::string toStr<DC::http::response>()const {
-				return GetVersionStr() + " " + other;
-			}
-
-		public:
-			inline void setVersion(const double& num) {
-				version = DC::STR::toString(num);
-			}
-
-			inline void setOther(const std::string& input) {
-				other = input;
+				return GetVersionStr() + " " + second + " " + third;
 			}
 
 		private:
-			std::string version, other;
+			std::string version, second, third;//second:GET\200 third:URI\OK
 
 		private:
-			inline std::string GetVersionStr()const noexcept {
+			inline std::string GetVersionStr()const {
 				return "HTTP/" + version;
 			}
 
-			inline void SetMethod(const http::method& input) {//把method字符串放入第一个空格之前（替换掉原有的第一个空格之前的字符串），如果没有第一个空格，则把method放入开头，然后加空格，然后加原来的other的内容
-				std::size_t loca = 0;
-				for (; loca < other.size(); loca++) {
-					if (other[loca] == ' ') break;
-				}
-				if (loca == other.size()) { other = input + " " + other; return; }
-				other = input + DC::STR::getSub(other, loca - 1, other.size());
+			inline std::string& method() {
+				return second;
 			}
 
-			inline method GetMethod()const {//返回other里第一个空格之前的子串，如果没有则抛异常
-				std::string method_str;
-				for (const auto& p : other) {
-					if (p != ' ') { method_str.push_back(p); continue; }
-					break;
-				}
-				if (method_str.empty()) throw DC::DC_ERROR("GetMethod", "can't get method", 0);
-				return method_str;
+			inline std::string& StatusCode() {
+				return second;
 			}
 
-			inline void SetStatusCode(const http::status_code& input) {
-				other = httpSpace::getSC(input);
+			inline std::string& StatusCodeDes() {
+				return third;
 			}
 
-			inline http::status_code GetStatusCode()const {
-				std::string rv;
-				for (const auto& p : other) {
-					if (std::isdigit(p)) rv.push_back(p);
-				}
-				if (rv.empty()) throw DC::DC_ERROR("GetStatusCode", "there's no number in string \"other\"", 0);
-				return DC::STR::toType<int32_t>(rv);
-			}
-
-			inline void SetURI(const std::string& input) {//放到第一个空格之后，空格不够抛异常
-				auto frs = DC::STR::find(other, " ");
-				if (frs.getplace_ref().empty()) throw DC::DC_ERROR("SetURI", "space is not enough", 0);
-				auto before = DC::STR::getSub(other, -1, *frs.getplace_ref().begin());
-				other = before + " " + input;
-			}
-
-			inline std::string GetURI()const {//返回第一个空格到结尾之间的东西，如果空格不够抛异常。
-				auto frs = DC::STR::find(other, " ");
-				if (frs.getplace_ref().empty()) throw DC::DC_ERROR("GetURI", "space is not enough", 0);
-				return DC::STR::getSub(other, *frs.getplace_ref().begin(), other.size());
+			inline std::string& URI() {
+				return third;
 			}
 		};
 
@@ -218,8 +194,9 @@ namespace DC {
 			std::string toStr()const {
 				std::string returnvalue;
 				for (const auto& p : m_data) {
-					returnvalue += p.GetName() += p.GetSeparator() + p.GetValue() + '\n';
+					returnvalue += p.GetName() += p.GetSeparator() + p.GetValue() + httpSpace::nextline;
 				}
+				returnvalue.erase(--returnvalue.rbegin().base());
 				returnvalue.erase(--returnvalue.rbegin().base());
 				return returnvalue;
 			}
@@ -234,8 +211,6 @@ namespace DC {
 		};
 
 		namespace httpSpace {
-
-			static const char *emptyline = "\r\n\r\n";
 
 			class base {
 			public:
@@ -257,22 +232,13 @@ namespace DC {
 				}
 
 			public:
-				inline void setTitle(const title& input) {
-					m_title = input;
-				}
+				inline std::string HTTPVersion() { return m_title.version; }
 
-				template<typename T>
-				inline void setHeaders(T&& input) {
-					static_assert(std::is_same<std::decay_t<T>, headers>::value, "input type should be headers");
-					m_headers = std::forward<T>(input);
-				}
+				inline void setHTTPVersion(const double& input) { m_title.version = DC::STR::toString(input); }
 
-				template<typename T>
-				inline void setBody(T&& input) {
-					m_body = std::forward<T>(input);
-				}
+				inline void setHTTPVersion(const std::string& input) { m_title.version = input; }
 
-				inline const http::title& Title()const {
+				inline http::title& Title() {
 					return m_title;
 				}
 
@@ -280,7 +246,7 @@ namespace DC {
 					return m_headers;
 				}
 
-				inline const http::body& Body()const {
+				inline http::body& Body() {
 					return m_body;
 				}
 
@@ -297,9 +263,9 @@ namespace DC {
 				static_assert(std::is_same<std::decay_t<titleType>, title>::value, "first arg's type should be title");
 				static_assert(std::is_same<std::decay_t<headersType>, headers>::value, "second arg's type should be headers");
 				static_assert(std::is_same<std::decay_t<bodyType>, body>::value, "third arg's type should be body");
-				object.setTitle(std::forward<title>(inputtitle));
-				object.setHeaders(std::forward<headers>(inputheaders));
-				object.setBody(std::forward<body>(inputbody));
+				object.Title() = std::forward<title>(inputtitle);
+				object.Headers() = std::forward<headers>(inputheaders);
+				object.Body() = std::forward<body>(inputbody);
 			}
 
 			template<typename T>
@@ -316,7 +282,11 @@ namespace DC {
 					}
 					return rv;
 				};
-				return http::title(GetVersionNumStr(DC::STR::getSub(input, *loca.getplace_ref().rbegin(), input.size())), DC::STR::getSub(input, -1, *loca.getplace_ref().rbegin()));
+				auto methodAndURI = DC::STR::getSub(input, -1, *loca.getplace_ref().rbegin());
+				auto frs = methodAndURI.find_first_of(' ');
+				if (frs == std::string::npos) throw DC::DC_ERROR("title_deserialization", "space not found", 0);
+
+				return http::title(GetVersionNumStr(DC::STR::getSub(input, *loca.getplace_ref().rbegin(), input.size())), DC::STR::getSub(methodAndURI, -1, frs), DC::STR::getSub(methodAndURI, frs, methodAndURI.size()));
 			}
 
 			template<>
@@ -330,21 +300,23 @@ namespace DC {
 					}
 					return rv;
 				};
-				return http::title(GetVersionNumStr(DC::STR::getSub(input, -1, *loca.getplace_ref().begin())), DC::STR::getSub(input, *loca.getplace_ref().rbegin(), input.size()));
+				auto frs = DC::STR::find(input, " ");
+				if (frs.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "space not found", 0);
+				return http::title(GetVersionNumStr(DC::STR::getSub(input, -1, *loca.getplace_ref().begin())), (http::status_code)(DC::STR::toType<int32_t>(DC::STR::getSub(input, *frs.getplace_ref().begin(), *frs.getplace_ref().rbegin()))));
 			}
 
 			http::headers headers_deserialization(const std::string& input) {
 				http::headers rv;
-				std::string temp;
-				for (const auto& p : input) {
-					if (p == '\r') { rv.add(temp); temp.clear(); continue; }
-					temp.push_back(p);
+				auto frs = DC::STR::find(input, http::httpSpace::nextline);
+				if (frs.getplace_ref().empty()) return rv;
+				rv.add(DC::STR::getSub(input, -1, *frs.getplace_ref().begin()));
+				for (std::size_t i = 1; i < frs.getplace_ref().size(); i++) {
+					rv.add(DC::STR::getSub(input, frs.getplace_ref()[i - 1] + 1, frs.getplace_ref()[i]));
 				}
-				if (!temp.empty()) rv.add(temp);
+				rv.add(DC::STR::getSub(input, frs.getplace_ref()[frs.getplace_ref().size() - 1] + 1, input.size()));
 				return rv;
 			}
-
-
+			
 		}
 
 		class request final :public httpSpace::base {
@@ -358,23 +330,15 @@ namespace DC {
 
 		public:
 			virtual inline std::string toStr()const override {
-				return m_title.toStr<request>() + '\n' + m_headers.toStr() + httpSpace::emptyline + m_body;
+				return m_title.toStr<request>() + httpSpace::nextline + m_headers.toStr() + httpSpace::emptyline + m_body;
 			}
 
-			inline void setMethod(const http::method& input) {
-				m_title.SetMethod(input);
+			inline method& Method() {
+				return m_title.method();
 			}
 
-			inline method Method() {
-				return m_title.GetMethod();
-			}
-
-			inline void setURI(const std::string& input) {
-				m_title.SetURI(input);
-			}
-
-			inline std::string URI() {
-				return m_title.GetURI();
+			inline std::string& URI() {
+				return m_title.URI();
 			}
 		};
 
@@ -389,15 +353,16 @@ namespace DC {
 
 		public:
 			virtual inline std::string toStr()const override {
-				return m_title.toStr<response>() + '\n' + m_headers.toStr() + httpSpace::emptyline + m_body;
+				return m_title.toStr<response>() + httpSpace::nextline + m_headers.toStr() + httpSpace::emptyline + m_body;
 			}
 
 			inline void setStatusCode(const http::status_code& input) {
-				m_title.SetStatusCode(input);
+				m_title.StatusCode() = DC::STR::toString(input);
+				m_title.StatusCodeDes() = httpSpace::getSC(input);
 			}
 
 			inline http::status_code StatusCode() {
-				return m_title.GetStatusCode();
+				return DC::STR::toType<int32_t>(m_title.StatusCode());
 			}
 		};
 
@@ -429,15 +394,15 @@ namespace DC {
 			std::size_t titleend = 0, headersend = 0;
 
 			for (std::size_t i = 0; i < input.size(); i++) {
-				if (input[i] == '\n') { titleend = i; break; }
+				if (input[i] == '\r') { titleend = i; break; }
 				titleraw.push_back(input[i]);
 			}
 
 			auto emptylineLoca = DC::STR::find(input, httpSpace::emptyline);
 			if (emptylineLoca.getplace_ref().empty()) throw DC::DC_ERROR("response_deserialization", "emptyline not found", 0);
-			headersraw = DC::STR::getSub(input, titleend, *emptylineLoca.getplace_ref().begin());
+			headersraw = DC::STR::getSub(input, titleend + 1, *emptylineLoca.getplace_ref().begin());
 
-			bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline), input.size());
+			bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().rbegin() + sizeof(httpSpace::emptyline)-1, input.size());
 
 			return response(title(httpSpace::title_deserialization<response>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
 		}
