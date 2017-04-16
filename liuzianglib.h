@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.2V13
-//20170415
+//Version 2.4.2V15
+//20170416
 
 #define GET_FIRST_PARAMETERS 0//  ”√”⁄GetCommandLineParameters
 
@@ -140,7 +140,7 @@ namespace DC {
 		}
 
 	public:		
-		void Set(const std::string& input) {
+		virtual void Set(const std::string& input) {
 			bool OKflag = false;
 			std::size_t whereis = 0;
 

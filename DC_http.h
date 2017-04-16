@@ -6,7 +6,8 @@
 #include <vector>
 #include <string>
 #include <cctype>
-//Version 2.4.2V14
+#include <functional>
+//Version 2.4.2V15
 //20170416
 
 namespace DC {
@@ -43,7 +44,7 @@ namespace DC {
 
 		namespace httpSpace {
 
-			static const char *emptyline = "\r\n\r\n", *nextline = "\r\n";
+			static const char *emptyline = "\r\n\r\n", *nextline = "\r\n", *Key_TransferEncoding = "Transfer-Encoding", *Key_ContentLength = "Content-Length";
 
 			class header final :public DC::KeyValuePair {
 			public:
@@ -64,9 +65,9 @@ namespace DC {
 					return ':';
 				}
 
-				virtual inline std::string GetValue()const override {
-					if (*value.begin() == ' ') return value;
-					return " " + value;
+				virtual void Set(const std::string& input)override {
+					DC::KeyValuePair::Set(input);
+					if (!value.empty()) if (*value.begin() == ' ') value.erase(value.begin());
 				}
 
 			protected:
@@ -143,6 +144,11 @@ namespace DC {
 				}
 			};
 
+			inline bool vec_header_find_func(const header& obj, const std::string& name) {
+				if (obj.GetName() == name&&obj.isSetOK()) return true;
+				return false;
+			}
+
 		}
 
 		class headers final {
@@ -171,9 +177,10 @@ namespace DC {
 			}
 
 		public:
-			template<typename ...argsType, class = typename std::enable_if_t<!std::is_same<std::decay_t<argsType...>, std::string>::value>>
-			void add(argsType&& ...args) {//用法:add(addHeader("name", "value"), addHeader("name2", "value2"), addHeader("name3", "value3")......);
+			template<typename T, typename ...argsType, class = typename std::enable_if_t<!std::is_same<std::decay_t<T>, std::string>::value>>
+			void add(T&& first, argsType&& ...args) {//用法:add(addHeader("name", "value"), addHeader("name2", "value2"), addHeader("name3", "value3")......);
 				auto args_value = DC::GetArgs(std::forward<argsType>(args)...);
+				m_data.emplace_back(std::forward<T>(first));
 				for (const auto& p : args_value) {
 					m_data.push_back(std::move(p.get<httpSpace::header>()));
 				}
@@ -181,6 +188,28 @@ namespace DC {
 
 			inline void add(const std::string& input) {
 				m_data.emplace_back(input);
+			}
+
+			inline bool hasKey(const std::string& input)const noexcept {
+				return std::find_if(m_data.begin(), m_data.end(), std::bind(httpSpace::vec_header_find_func, std::placeholders::_1, input)) != m_data.end();
+			}
+
+			inline httpSpace::header getHeader(const std::string& key)const {//如果有多个匹配的key，返回排在最前的
+				auto it = std::find_if(m_data.begin(), m_data.end(), std::bind(httpSpace::vec_header_find_func, std::placeholders::_1, key));
+				if (it == m_data.end()) throw DC::DC_ERROR("get", "key not found", 0);
+				return *it;
+			}
+
+			inline std::string getValue(const std::string& key)const {
+				return getHeader(key).GetValue();
+			}
+
+			inline void drop(const std::string& key) {//如果有多个header的key都是，那么把它们全部删掉
+				while (true) {
+					auto it = std::find_if(m_data.begin(), m_data.end(), std::bind(httpSpace::vec_header_find_func, std::placeholders::_1, key));
+					if (it == m_data.end()) return;
+					m_data.erase(it);
+				}
 			}
 
 			inline void clear() {
@@ -199,11 +228,6 @@ namespace DC {
 				returnvalue.erase(--returnvalue.rbegin().base());
 				returnvalue.erase(--returnvalue.rbegin().base());
 				return returnvalue;
-			}
-
-		public:
-			inline const std::vector<httpSpace::header>& get()const {
-				return m_data;
 			}
 
 		private:
@@ -229,6 +253,7 @@ namespace DC {
 					m_title = std::move(input.m_title);
 					m_headers = std::move(input.m_headers);
 					m_body = std::move(input.m_body);
+					return *this;
 				}
 
 			public:
@@ -308,7 +333,12 @@ namespace DC {
 			http::headers headers_deserialization(const std::string& input) {
 				http::headers rv;
 				auto frs = DC::STR::find(input, http::httpSpace::nextline);
-				if (frs.getplace_ref().empty()) return rv;
+				if (frs.getplace_ref().empty()) {
+					if (input.empty()) return rv;
+					//只有一行的情况
+					rv.add(input);
+					return rv;
+				}
 				rv.add(DC::STR::getSub(input, -1, *frs.getplace_ref().begin()));
 				for (std::size_t i = 1; i < frs.getplace_ref().size(); i++) {
 					rv.add(DC::STR::getSub(input, frs.getplace_ref()[i - 1] + 1, frs.getplace_ref()[i]));
@@ -330,7 +360,9 @@ namespace DC {
 
 		public:
 			virtual inline std::string toStr()const override {
-				return m_title.toStr<request>() + httpSpace::nextline + m_headers.toStr() + httpSpace::emptyline + m_body;
+				auto temp = m_title.toStr<request>() + httpSpace::nextline + m_headers.toStr();
+				if (m_body.empty()) return temp + httpSpace::emptyline;
+				else return temp + httpSpace::emptyline + m_body;
 			}
 
 			inline method& Method() {
@@ -353,7 +385,9 @@ namespace DC {
 
 		public:
 			virtual inline std::string toStr()const override {
-				return m_title.toStr<response>() + httpSpace::nextline + m_headers.toStr() + httpSpace::emptyline + m_body;
+				auto temp = m_title.toStr<response>() + httpSpace::nextline + m_headers.toStr();
+				if (m_body.empty()) return temp + httpSpace::emptyline;
+				else return temp + httpSpace::emptyline + m_body;
 			}
 
 			inline void setStatusCode(const http::status_code& input) {
@@ -381,10 +415,12 @@ namespace DC {
 			}
 
 			auto emptylineLoca = DC::STR::find(input, httpSpace::emptyline);
-			if (emptylineLoca.getplace_ref().empty()) throw DC::DC_ERROR("request_deserialization", "emptyline not found", 0);
-			headersraw = DC::STR::getSub(input, titleend, *emptylineLoca.getplace_ref().begin());
+			if (emptylineLoca.getplace_ref().empty()) 
+				headersraw = DC::STR::getSub(input, titleend, input.size());
+			else
+				headersraw = DC::STR::getSub(input, titleend, *emptylineLoca.getplace_ref().begin());
 
-			bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline), input.size());
+			if (!emptylineLoca.getplace_ref().empty()) bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline) - 1, input.size());
 
 			return request(httpSpace::title(httpSpace::title_deserialization<request>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
 		}
@@ -399,10 +435,12 @@ namespace DC {
 			}
 
 			auto emptylineLoca = DC::STR::find(input, httpSpace::emptyline);
-			if (emptylineLoca.getplace_ref().empty()) throw DC::DC_ERROR("response_deserialization", "emptyline not found", 0);
-			headersraw = DC::STR::getSub(input, titleend + 1, *emptylineLoca.getplace_ref().begin());
+			if (emptylineLoca.getplace_ref().empty())
+				headersraw = DC::STR::getSub(input, titleend, input.size());
+			else
+				headersraw = DC::STR::getSub(input, titleend, *emptylineLoca.getplace_ref().begin());
 
-			bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().rbegin() + sizeof(httpSpace::emptyline) - 1, input.size());
+			if (!emptylineLoca.getplace_ref().empty()) bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline) - 1, input.size());
 
 			return response(httpSpace::title(httpSpace::title_deserialization<response>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
 		}
@@ -415,8 +453,31 @@ namespace DC {
 			return httpSpace::title(inputVersion, inputmethod, inputURI);
 		}
 
-	}
+		inline std::string get(const httpSpace::base& input, const std::string& key) {
+			return const_cast<httpSpace::base&>(input).Headers().getValue(key);
+		}
 
+		inline bool has_body(const httpSpace::base& input)noexcept {
+			return !const_cast<httpSpace::base&>(input).Body().empty();
+		}
+
+		inline bool has_TransferEncoding(const httpSpace::base& input)noexcept {
+			return const_cast<httpSpace::base&>(input).Headers().hasKey(httpSpace::Key_TransferEncoding);
+		}
+
+		inline std::string get_TransferEncoding(const httpSpace::base& input) {
+			return get(input, httpSpace::Key_TransferEncoding);
+		}
+
+		inline bool has_ContentLength(const httpSpace::base& input)noexcept {
+			return const_cast<httpSpace::base&>(input).Headers().hasKey(httpSpace::Key_ContentLength);
+		}
+
+		inline std::string get_ContentLength(const httpSpace::base& input) {
+			return get(input, httpSpace::Key_ContentLength);
+		}
+
+	}
 }
 
 #endif
