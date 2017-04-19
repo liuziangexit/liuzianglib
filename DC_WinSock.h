@@ -5,15 +5,18 @@
 #include <string>
 #include <memory>
 #pragma comment(lib, "ws2_32.lib")
-//Version 2.4.2V8
-//20170413
+//Version 2.4.2V17
+//20170419
 //注意:DC_WinSock.h必须先于DC_MySQL.h包含
 
 namespace DC {
 
 	namespace WinSock {
 
-		sockaddr_in MakeAddr(const std::string& address, std::size_t port) {
+		using Address = sockaddr_in;
+		using Socket = SOCKET;
+		
+		Address MakeAddr(const std::string& address, std::size_t port) {
 			sockaddr_in addr;
 			addr.sin_family = AF_INET;
 			addr.sin_port = htons(port);
@@ -38,6 +41,10 @@ namespace DC {
 			s = socket(af, type, protocol);
 		}
 
+		inline void SocketInitOverlapped(Socket& s) {
+			s = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+		}
+
 		inline void SocketInit_TCP(SOCKET& s) {
 			SocketInit(s, AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		}
@@ -53,7 +60,7 @@ namespace DC {
 			closesocket(s);
 		}
 
-		bool Listen(SOCKET s, int QueueSize) {
+		inline bool Listen(SOCKET s, int QueueSize) {
 			if (listen(s, QueueSize) != 0) {
 				return false;
 			}
@@ -64,10 +71,20 @@ namespace DC {
 			closesocket(s);
 		}
 
-		bool GetConnection(SOCKET& Sock, SOCKET SockListen, sockaddr_in& RemoteAddr) {
+		inline bool Accept(SOCKET& accSock, SOCKET SockListen, sockaddr_in& RemoteAddr) {
 			int RemoteAddrLen = sizeof(RemoteAddr);
-			Sock = accept(SockListen, (sockaddr*)&RemoteAddr, &RemoteAddrLen);
-			if (Sock == INVALID_SOCKET) {
+			accSock = accept(SockListen, (sockaddr*)&RemoteAddr, &RemoteAddrLen);
+			if (accSock == INVALID_SOCKET) {
+				return false;
+			}
+			return true;
+		}
+
+		inline bool Accept(SOCKET& accSock, SOCKET SockListen) {
+			Address temp;
+			int RemoteAddrLen = sizeof(temp);
+			accSock = accept(SockListen, reinterpret_cast<sockaddr*>(&temp), &RemoteAddrLen);
+			if (accSock == INVALID_SOCKET) {
 				return false;
 			}
 			return true;
@@ -80,7 +97,7 @@ namespace DC {
 			return true;
 		}
 
-		bool Send(SOCKET s, const std::string& str) {
+		inline bool Send(SOCKET s, const std::string& str) {
 			if (send(s, str.c_str(), str.size(), 0) != SOCKET_ERROR) return true;
 			return false;
 		}
@@ -97,16 +114,16 @@ namespace DC {
 			return returnvalue;
 		}
 
-		void Close(SOCKET s) {
+		inline void Close(SOCKET s) {
 			closesocket(s);
 		}
 
-		bool SetRecvTimeOut(SOCKET s, std::size_t limit) {
+		inline bool SetRecvTimeOut(SOCKET s, std::size_t limit) {
 			if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char *)&limit, sizeof(int)) == SOCKET_ERROR) return false;
 			return true;
 		}
 
-		bool SetSendTimeOut(SOCKET s, std::size_t limit) {
+		inline bool SetSendTimeOut(SOCKET s, std::size_t limit) {
 			if (setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (char *)&limit, sizeof(int)) == SOCKET_ERROR) return false;
 			return true;
 		}

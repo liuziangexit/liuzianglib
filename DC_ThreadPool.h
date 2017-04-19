@@ -6,12 +6,12 @@
 #include <mutex>
 #include <future>
 #include <queue>
-//Version 2.4.2
-//20170330
+//Version 2.4.2V17
+//20170419
 
 namespace DC {
 
-	class ThreadPool {//ThreadPool可能会在任务队列没有完成之前析构。我们没有提供wait接口以等待线程池完成所有任务，因为那会影响性能表现。不过你可以使用GetJobsQueueSize()来获取任务队列大小。
+	class ThreadPool {
 	public:
 		ThreadPool(std::size_t inputThreadNumber) {
 			ThreadNumber = inputThreadNumber;
