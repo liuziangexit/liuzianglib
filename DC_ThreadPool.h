@@ -6,8 +6,8 @@
 #include <mutex>
 #include <future>
 #include <queue>
-//Version 2.4.2V17
-//20170419
+//Version 2.4.2V18
+//20170420
 
 namespace DC {
 
@@ -72,6 +72,15 @@ namespace DC {
 			return RunningNumber;
 		}
 
+		void join() {
+			if (state_ == state::EXPIRING) return;
+			state_ = state::EXPIRING;
+			thread_cv.notify_all();
+			for (std::thread& t : WorkerThreads) {
+				if (t.joinable()) t.join();
+			}
+		}
+
 	private:
 		void push_task(job_type job) {
 			{
@@ -92,14 +101,6 @@ namespace DC {
 				RunningNumber++;
 				job();
 				RunningNumber--;
-			}
-		}
-
-		void join() {
-			state_ = state::EXPIRING;
-			thread_cv.notify_all();
-			for (std::thread& t : WorkerThreads) {
-				if (t.joinable()) t.join();
 			}
 		}
 

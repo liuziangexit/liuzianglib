@@ -5,8 +5,8 @@
 #include <string>
 #include <memory>
 #pragma comment(lib, "ws2_32.lib")
-//Version 2.4.2V17
-//20170419
+//Version 2.4.2V18
+//20170420
 //注意:DC_WinSock.h必须先于DC_MySQL.h包含
 
 namespace DC {
@@ -22,6 +22,10 @@ namespace DC {
 			addr.sin_port = htons(port);
 			addr.sin_addr.S_un.S_addr = inet_addr(address.c_str());
 			return addr;
+		}
+
+		inline std::string GetAddrString(const Address& input) {
+			return inet_ntoa(input.sin_addr);
 		}
 
 		inline bool Startup(int a, int b) {

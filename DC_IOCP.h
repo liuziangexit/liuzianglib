@@ -8,8 +8,8 @@
 #include "DC_WinSock.h"
 #include "DC_ThreadPool.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V17
-//20170419
+//Version 2.4.2V18
+//20170420
 
 namespace DC {
 
@@ -20,6 +20,8 @@ namespace DC {
 			class unique_id {
 			public:
 				unique_id() :uniqueid(DC::randomer(0, 131070)) {}
+
+				unique_id(const int32_t input) :uniqueid(input) {}
 
 				unique_id(const unique_id&) = default;
 
@@ -58,7 +60,7 @@ namespace DC {
 				m_wsabuf.len = buffersize;
 				if (buffersize != 0) {
 					m_wsabuf.buf = new char[buffersize];
-					if (buffersize != 1) resetBuffer(); else m_wsabuf.buf[0] = NULL;
+					resetBuffer();
 				}
 				else m_wsabuf.buf = nullptr;
 			}
@@ -76,7 +78,7 @@ namespace DC {
 
 		public:
 			inline void resetBuffer() {
-				memset(m_wsabuf.buf, NULL, m_wsabuf.len);
+				ZeroMemory(m_wsabuf.buf, m_wsabuf.len);
 			}
 
 			inline void CloseSock() {
@@ -86,19 +88,12 @@ namespace DC {
 				}
 			}
 
-			PerIOContext* Clone() {
-				auto rv = new(std::nothrow) PerIOContext(m_wsabuf.len);
-				rv->m_opType = m_opType;
-				rv->m_overlapped = m_overlapped;
-				rv->m_sock = m_sock;
-				memcpy(rv->m_wsabuf.buf, m_wsabuf.buf, m_wsabuf.len);
-				return rv;
-			}
-
 			void destroy() {
 				CloseSock();
 
-				if (m_wsabuf.buf != nullptr) delete[] m_wsabuf.buf;
+				if (m_wsabuf.buf != nullptr) {
+					delete[] m_wsabuf.buf;
+				}
 				delete this;
 			}
 		};
@@ -110,7 +105,6 @@ namespace DC {
 			struct PICdeleter {
 			public:
 				inline void operator()(IOCP::PerIOContext *ptr) {
-					closesocket(ptr->m_sock);
 					ptr->destroy();
 				}
 			};
@@ -120,6 +114,8 @@ namespace DC {
 				friend class PerSocketContext;
 			public:
 				Pool() = default;
+
+				virtual ~Pool() = default;
 
 			public:
 				template <typename ...U>
@@ -133,42 +129,46 @@ namespace DC {
 					return m.rbegin()->get();
 				}
 
-				T* put(T* ptr) {
-					m.emplace_back();
-					m.rbegin()->reset(ptr);
-					return ptr;
+				template <typename ...U>
+				inline T* put(U&& ...args)noexcept {//only unique_ptr
+					try {
+						m.emplace_back(std::forward<U>(args)...);
+					}
+					catch (...) {
+						return nullptr;
+					}
+					return m.rbegin()->get();
 				}
 
-				bool release(const T& input) {
+				T* release(const T *input) {
 					for (auto i = m.begin(); i != m.end(); i++) {
-						if (input == *(i->get())) {
-							i->release();
-							m.erase(i);
+						if (*input == *(i->get()))
+							return i->release();
+					}
+					return nullptr;
+				}
+
+				bool drop(const T *input) {
+					for (auto i = m.begin(); i != m.end(); i++) {
+						if (*input == *(i->get())) {
+							i->get_deleter()(i->release());
 							return true;
 						}
 					}
 					return false;
 				}
 
-				bool drop(const T& input) {
+				void clean() {
 					for (auto i = m.begin(); i != m.end(); i++) {
-						if (input == *(i->get())) { m.erase(i); return true; }
+						if (!(*i)) { m.erase(i); clean(); break; }
 					}
-					return false;
-				}
-
-				bool inside(const T& input)const {
-					for (auto i = m.begin(); i != m.end(); i++) {
-						if (input == *(i->get())) return true;
-					}
-					return false;
 				}
 
 				inline void clear() {
 					m.clear();
 				}
 
-			private:
+			private:				
 				std::vector<std::unique_ptr<T, deleter>> m;
 			};
 
@@ -189,31 +189,39 @@ namespace DC {
 					return m.rbegin()->get();
 				}
 
-				T* put(T* ptr) {
-					m.emplace_back();
-					m.rbegin()->reset(ptr);
-					return ptr;
+				template <typename ...U>
+				inline T* put(U&& ...args)noexcept {//only unique_ptr
+					try {
+						m.emplace_back(std::forward<U>(args)...);
+					}
+					catch (...) {
+						return nullptr;
+					}
+					return m.rbegin()->get();
 				}
 
-				bool release(const T& input) {
+				T* release(const T *input) {
 					for (auto i = m.begin(); i != m.end(); i++) {
-						if (input == *(i->get())) {
-							i->release();
-							m.erase(i);
+						if (*input == *(i->get()))
+							return i->release();
+					}
+					return nullptr;
+				}
+
+				bool drop(const T *input) {
+					for (auto i = m.begin(); i != m.end(); i++) {
+						if (*input == *(i->get())) {
+							i->get_deleter()(i->release());
 							return true;
 						}
 					}
 					return false;
 				}
 
-				bool drop(const T& input) {
+				void clean() {
 					for (auto i = m.begin(); i != m.end(); i++) {
-						if (input == *(i->get())) {
-							m.erase(i);
-							return true;
-						}
+						if (!(*i)) { m.erase(i); clean(); break; }
 					}
-					return false;
 				}
 
 				inline void clear() {
@@ -226,7 +234,7 @@ namespace DC {
 
 		}
 
-		class PerSocketContext {
+		class PerSocketContext :public IOCPSpace::Pool<PerIOContext, IOCPSpace::PICdeleter> {
 		public:
 			PerSocketContext() {
 				m_sock = INVALID_SOCKET;
@@ -250,47 +258,32 @@ namespace DC {
 				}
 			}
 
-			PerSocketContext* Clone() {
-				auto rv = new PerSocketContext;
-				rv->m_sock = m_sock;
-				rv->m_clientAddr = m_clientAddr;
-				return rv;
-			}
-
-			inline PerIOContext* make(const std::size_t& input)noexcept {
-				return m_listIOContext.make(input);
-			}
-
-			inline bool drop(const PerIOContext& input) {
-				return m_listIOContext.drop(input);
-			}
-
 		public:
 			SOCKET m_sock;
 			SOCKADDR_IN m_clientAddr;
-			IOCPSpace::Pool<PerIOContext, IOCPSpace::PICdeleter> m_listIOContext;
 			IOCPSpace::unique_id uniqueid;
 		};
 
+		using PICptr = std::unique_ptr<PerIOContext, IOCPSpace::PICdeleter>;
+		using PSCptr = std::unique_ptr<PerSocketContext>;
+
 		class Server {
 		public:
-			Server(const std::size_t& inputThreadNumber) :TP(inputThreadNumber), ThreadNumber(inputThreadNumber), m_iocp(CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0)), m_listen(nullptr), MaxAcceptEx(1), AcceptEx_p(nullptr), GetAcceptExSockAddrs_p(nullptr) {
+			Server(const std::size_t& inputThreadNumber) :TP(nullptr), ThreadNumber(inputThreadNumber), m_listen(INVALID_SOCKET), m_iocp(CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0)), AcceptEx_p(nullptr), GetAcceptExSockAddrs_p(nullptr) {
+				//线程数量+1是为了给accept线程留一个
 				if (m_iocp == NULL) throw DC::DC_ERROR("Server::Server", "CreateIoCompletionPort error", -1);
 
 				GUID GuidAcceptEx = WSAID_ACCEPTEX, GuidGetAcceptExSockAddrs = WSAID_GETACCEPTEXSOCKADDRS;
-				auto holder = PIC_Pool.make(1);
+				PICptr holder(new PerIOContext(1));
 				DC::WinSock::SocketInit_TCP(holder->m_sock);
 				DWORD dwBytes = 0;
 				if (SOCKET_ERROR == WSAIoctl(holder->m_sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &GuidAcceptEx, sizeof(GuidAcceptEx), &AcceptEx_p, sizeof(AcceptEx_p), &dwBytes, NULL, NULL) ||
 					SOCKET_ERROR == WSAIoctl(holder->m_sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &GuidGetAcceptExSockAddrs, sizeof(GuidGetAcceptExSockAddrs), &GetAcceptExSockAddrs_p, sizeof(GetAcceptExSockAddrs_p), &dwBytes, NULL, NULL))
 					throw DC::DC_ERROR("Server::Server", "can't get function pointer", -1);
-				PIC_Pool.drop(*holder);
-				TP.start();
 			}
 
 			virtual ~Server()noexcept {
 				Stop();
-				PostExit();
 				if (m_iocp != nullptr&&m_iocp != NULL) CloseHandle(m_iocp);
 			}
 
@@ -311,74 +304,95 @@ namespace DC {
 				bindAddr = WinSock::MakeAddr(ip, port);
 			}
 
-			inline std::size_t& MaxAcceptExNumber() {
-				return MaxAcceptEx;
-			}
-
-			bool Start() {
-				if (!startListen()) return false;
-				
+			void Start() {
+				TP = new DC::ThreadPool(ThreadNumber + 1);
+				TP->async(&Server::ListenThread, this);
 				for (std::size_t i = 0; i < ThreadNumber; i++)
-					TP.async(&Server::WorkerThread, this);
-				return true;
+					TP->async(&Server::WorkerThread, this);
+				TP->start();
 			}
 
 			inline void Stop() {
-				PostExit();
-				if (m_listen != nullptr&&m_listen != NULL) delete m_listen;
-				m_listen = nullptr;
-				PIC_Pool.clear();
-				PSC_Pool.clear();
+				PICptr PIC(new PerIOContext(1));
+				closesocket(m_listen);
+				PostExit(PIC.get());
+				if (TP != nullptr) { delete TP; TP = nullptr; }
+				PSC_Pool.clear();		
 			}
 
-		public:
-			bool PostAccept() {
-				if (m_listen == nullptr || m_listen == NULL) return false;
-				if (AcceptEx_p == nullptr || AcceptEx_p == NULL) return false;
-				if (m_listen->m_sock == INVALID_SOCKET) return false;
+			virtual void OnRecv(PerSocketContext *PSC, const std::string& recvstr, const DC::WinSock::Address& ClientAddr) {}
 
-				PerIOContext *AcceptIoContext = PIC_Pool.make(getBufferSize());
+			virtual void OnSend(PerSocketContext *PSC, const std::string& sendstr, const DC::WinSock::Address& ClientAddr) {}
+
+		protected:
+			virtual inline const std::size_t getRecvBufferSize() {//recv 缓冲区
+				return 1024;
+			}
+
+			virtual inline const std::size_t getSendBufferSize() {//send 缓冲区
+				return 1024;
+			}
+
+		private:
+			bool PostRecv(PerSocketContext *PSC, PerIOContext *PIC) {
+				DWORD dwFlags = 0;
 				DWORD dwBytes = 0;
-				AcceptIoContext->m_opType = ACCEPT_POSTED;
-				if ((AcceptIoContext->m_sock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) return false;
 
-				//注意，AcceptIoContext->m_wsabuf.buf 不能是 null
-				if (!AcceptEx_p(m_listen->m_sock, AcceptIoContext->m_sock, AcceptIoContext->m_wsabuf.buf, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, &dwBytes, &AcceptIoContext->m_overlapped)) {
-					if (WSAGetLastError() == ERROR_IO_PENDING) return true;
-					return false;
+				PIC->resetBuffer();
+				PIC->m_opType = RECV_POSTED;
+
+				int nBytesRecv = WSARecv(PSC->m_sock, &PIC->m_wsabuf, 1, &dwBytes, &dwFlags, &PIC->m_overlapped, NULL);
+
+				if (SOCKET_ERROR == nBytesRecv) {
+					if (WSA_IO_PENDING != WSAGetLastError())
+						return false;
 				}
 				return true;
 			}
 
-			bool PostAccept(PerIOContext *PIC) {
-				if (m_listen == nullptr || m_listen == NULL) return false;
-				if (AcceptEx_p == nullptr || AcceptEx_p == NULL) return false;
-				if (m_listen->m_sock == INVALID_SOCKET) return false;
-				if (!PIC_Pool.inside(*PIC)) return false;
+			inline bool DoRecv(PerSocketContext *PSC, PerIOContext *PIC) {
+				OnRecv(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
+				return PostRecv(PSC, PIC);
+			}
 
+			bool PostSend(PerSocketContext *PSC, PerIOContext *PIC, const std::string& sendthis) {
+				DWORD dwFlags = 0;
+				DWORD dwBytes = sendthis.size();
+
+				if (sendthis.size() > PIC->m_wsabuf.len) return false;
+
+				PIC->resetBuffer();
+				memcpy(PIC->m_wsabuf.buf, sendthis.c_str(), sendthis.size());
+				PIC->m_opType = SEND_POSTED;
+
+				int nBytesRecv = WSASend(PSC->m_sock, &PIC->m_wsabuf, 1, &dwBytes, dwFlags, &PIC->m_overlapped, NULL);
+
+				if (SOCKET_ERROR == nBytesRecv) {
+					if (WSA_IO_PENDING != WSAGetLastError())
+						return false;
+				}
+				return true;
+			}
+
+			inline bool Send(PerSocketContext *client, const std::string& sendthis) {
+				return PostSend(client, client->make(getSendBufferSize()), sendthis);
+			}
+
+			inline bool DoSend(PerSocketContext *PSC, PerIOContext *PIC) {
+				OnSend(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
+				if (!PSC->drop(PIC)) throw DC_ERROR("DoSend", "", -1);
+			}
+
+			inline bool PostExit(PerIOContext *PIC) {
 				PerIOContext *AcceptIoContext = PIC;
 				DWORD dwBytes = 0;
-				AcceptIoContext->m_opType = ACCEPT_POSTED;
-				if ((AcceptIoContext->m_sock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) return false;
-
-				//注意，AcceptIoContext->m_wsabuf.buf 不能是 null
-				if (!AcceptEx_p(m_listen->m_sock, AcceptIoContext->m_sock, AcceptIoContext->m_wsabuf.buf, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, &dwBytes, &AcceptIoContext->m_overlapped)) {
-					if (WSAGetLastError() == ERROR_IO_PENDING) return true;
-					return false;
-				}
-				return true;
-			}
-
-			inline bool PostExit() {
-				PerIOContext *AcceptIoContext = PIC_Pool.make(getBufferSize());
-				DWORD dwBytes = 0;
 				AcceptIoContext->m_opType = OperationType::NULL_POSTED;
-			
+
 				if (0 != PostQueuedCompletionStatus(m_iocp, dwBytes, reinterpret_cast<ULONG_PTR>(AcceptIoContext), &AcceptIoContext->m_overlapped)) return true;
 				return false;
 			}
 
-			void WorkerThread() {
+			void WorkerThread() {				
 				DWORD dwBytesTransfered = 0;
 				OVERLAPPED *pOverlapped = NULL;
 				PerSocketContext *pSocketContext = NULL;
@@ -400,75 +414,39 @@ namespace DC {
 					}
 
 					switch (pIOContext->m_opType) {
-					case OperationType::ACCEPT_POSTED: {
-						std::cout << "got accept\n";
-						if (!DoAccept(pSocketContext, pIOContext))
-							PostAccept();
+					case OperationType::ACCEPT_POSTED: {}break;
+					case OperationType::RECV_POSTED: {
+						DoRecv(pSocketContext, pIOContext);
 					}break;
-					case OperationType::RECV_POSTED: {}break;
-					case OperationType::SEND_POSTED: {}break;
+					case OperationType::SEND_POSTED: {
+						DoSend(pSocketContext, pIOContext);
+					}break;
 					case OperationType::NULL_POSTED: {return; }break;
-					default: {
-						throw std::exception("some motherfuckers fucked up");
-					}break;
 					}
 				}
 			}
 
-		protected:
-			virtual inline const std::size_t getBufferSize() {
-				return 1;
-			}
+			void ListenThread()noexcept {
+				WinSock::SocketInit_TCP(m_listen);
+				if (m_listen == SOCKET_ERROR) return;
 
-			bool DoAccept(PerSocketContext *PSC, PerIOContext *PIC) {
-				SOCKADDR_IN* ClientAddr = NULL;
-				SOCKADDR_IN* LocalAddr = NULL;
-				int remoteLen = sizeof(SOCKADDR_IN), localLen = sizeof(SOCKADDR_IN);
+				if (!WinSock::Bind(m_listen, bindAddr)) { closesocket(m_listen); return; }				
+				if (!WinSock::Listen(m_listen, SOMAXCONN)) { closesocket(m_listen); return; }
 
-				GetAcceptExSockAddrs_p(PIC->m_wsabuf.buf, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, (LPSOCKADDR*)&LocalAddr, &localLen, (LPSOCKADDR*)&ClientAddr, &remoteLen);
+				SOCKET acceptSocket;
+				DC::WinSock::Address ClientAddr;
 
-				auto temp = PSC_Pool.make();
-				temp->m_sock = PIC->m_sock;
-				temp->m_clientAddr = *ClientAddr;
-				if (!AssociateWithIOCP(temp)) {
-					if (!PSC_Pool.drop(*temp)) throw DC::DC_ERROR("DoAccept", "", -1);
-					return false; 
+				while (true) {
+					
+					if (!DC::WinSock::Accept(acceptSocket, m_listen,ClientAddr)) { closesocket(m_listen); return; }
+
+					PSCptr ptr(new PerSocketContext);
+					ptr->m_sock = acceptSocket;
+					ptr->m_clientAddr = ClientAddr;
+					if (!AssociateWithIOCP(ptr.get())) continue;
+					if (!PostRecv(ptr.get(), ptr->make(getRecvBufferSize()))) continue;
+					PSC_Pool.put(std::move(ptr));
 				}
-				
-				auto temp2 = temp->make(getBufferSize());
-				temp2->m_opType = OperationType::RECV_POSTED;
-				temp2->m_sock = temp->m_sock;
-				if (true) {//投递recv
-					if (!PSC_Pool.drop(*temp)) throw DC::DC_ERROR("DoAccept", "", -1);
-					return false;
-				}
-
-				PIC->resetBuffer();
-				return PostAccept(PIC);
-			}
-
-		private:
-			bool startListen()noexcept {
-				if (m_listen != nullptr || m_listen != NULL) return false;
-
-				PerSocketContext *ptr = PSC_Pool.make();
-				if (ptr == nullptr) { PSC_Pool.drop(*ptr); return false; }
-
-				WinSock::SocketInitOverlapped(ptr->m_sock);
-				if (ptr->m_sock == SOCKET_ERROR) { PSC_Pool.drop(*ptr); return false; }
-
-				if (!AssociateWithIOCP(ptr)) { PSC_Pool.drop(*ptr); return false; }
-
-				if (!WinSock::Bind(ptr->m_sock, bindAddr)) { PSC_Pool.drop(*ptr); return false; }
-				if (!WinSock::Listen(ptr->m_sock, SOMAXCONN)) { PSC_Pool.drop(*ptr); return false; }
-
-				m_listen = ptr;
-				if (!PSC_Pool.release(*ptr)) throw DC::DC_ERROR("startListen", "some asshole got really fucked up.this is the fucking undefined behavior,i dont know why this happend,but fuck this anyway", -1);//严重错误
-
-				for (std::size_t i = 0; i < MaxAcceptEx; i++) {
-					if (!PostAccept()) return false;
-				}
-				return true;
 			}
 
 			inline bool AssociateWithIOCP(PerSocketContext* input) {
@@ -481,20 +459,18 @@ namespace DC {
 
 		protected:
 			HANDLE m_iocp;
-			PerSocketContext *m_listen;
-			ThreadPool TP;
-			std::size_t MaxAcceptEx;
+			SOCKET m_listen;
+			ThreadPool *TP;
 			const std::size_t ThreadNumber;
 
 			WinSock::Address bindAddr;
 
-			IOCPSpace::Pool<PerIOContext, IOCPSpace::PICdeleter> PIC_Pool;
 			IOCPSpace::Pool<PerSocketContext> PSC_Pool;
 
 			LPFN_ACCEPTEX AcceptEx_p;
 			LPFN_GETACCEPTEXSOCKADDRS GetAcceptExSockAddrs_p;
 		};
-
+		
 	}
 
 }
