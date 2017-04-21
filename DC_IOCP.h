@@ -9,7 +9,7 @@
 #include "DC_ThreadPool.h"
 #include "DC_timer.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V19
+//Version 2.4.2V20
 //20170421
 
 namespace DC {
@@ -81,7 +81,7 @@ namespace DC {
 
 		public:
 			inline void resetBuffer() {
-				ZeroMemory(m_wsabuf.buf, m_wsabuf.len);
+				memset(m_wsabuf.buf, NULL, m_wsabuf.len);
 			}
 
 			inline void CloseSock() {
@@ -122,12 +122,14 @@ namespace DC {
 
 			public:
 				inline void setCleanLimit(const int32_t& input) {
+					if (this == nullptr) return;
 					if (input < 1) { cleanLimit.store(1, std::memory_order_release); return; }
 					cleanLimit.store(input, std::memory_order_release);
 				}
 
 				template <typename ...U>
 				inline T* make(U&& ...args)noexcept {
+					if (this == nullptr) return nullptr;
 					Cleanif();
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					try {
@@ -141,6 +143,7 @@ namespace DC {
 
 				template <typename ...U>
 				inline T* put(U&& ...args)noexcept {//only unique_ptr
+					if (this == nullptr) return nullptr;
 					Cleanif();
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					try {
@@ -153,6 +156,7 @@ namespace DC {
 				}
 
 				T* release(const T *input) {
+					if (this == nullptr) return nullptr;
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					for (auto i = m.begin(); i != m.end(); i++) {
 						if (*input == *(i->get())) {
@@ -164,6 +168,7 @@ namespace DC {
 				}
 
 				bool drop(const T *input) {
+					if (this == nullptr) return false;
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					auto fres = std::find_if(m.begin(), m.end(), std::bind(&Pool::compare, this, std::placeholders::_1, input));
 
@@ -176,12 +181,14 @@ namespace DC {
 				}
 
 				void clean() {
+					if (this == nullptr) return;
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					realClean();
 					removeTime.store(0, std::memory_order_release);
 				}
 
 				inline void clear() {
+					if (this == nullptr) return;
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					m.clear();
 					removeTime.store(0, std::memory_order_release);
@@ -220,12 +227,14 @@ namespace DC {
 
 			public:
 				inline void setCleanLimit(const int32_t& input) {
+					if (this == nullptr) return;
 					if (input < 1) { cleanLimit.store(1, std::memory_order_release); return; }
 					cleanLimit.store(input, std::memory_order_release);
 				}
 
 				template <typename ...U>
 				inline T* make(U&& ...args)noexcept {
+					if (this == nullptr) return nullptr;
 					Cleanif();
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					try {
@@ -239,6 +248,7 @@ namespace DC {
 
 				template <typename ...U>
 				inline T* put(U&& ...args)noexcept {//only unique_ptr
+					if (this == nullptr) return nullptr;
 					Cleanif();
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					try {
@@ -251,6 +261,7 @@ namespace DC {
 				}
 
 				T* release(const T *input) {
+					if (this == nullptr) return nullptr;
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					for (auto i = m.begin(); i != m.end(); i++) {
 						if (*input == *(i->get())) {
@@ -262,6 +273,7 @@ namespace DC {
 				}
 
 				bool drop(const T *input) {
+					if (this == nullptr) return false;
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					auto fres = std::find_if(m.begin(), m.end(), std::bind(&Pool::compare, this, std::placeholders::_1, input));
 
@@ -274,12 +286,14 @@ namespace DC {
 				}
 
 				void clean() {
+					if (this == nullptr) return;
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					realClean();
 					removeTime.store(0, std::memory_order_release);
 				}
 
 				inline void clear() {
+					if (this == nullptr) return;
 					std::unique_lock<std::mutex> LwriteLock(writeLock);
 					m.clear();
 					removeTime.store(0, std::memory_order_release);
@@ -368,28 +382,42 @@ namespace DC {
 
 		class Server {
 		public:
-			Server(const std::size_t& inputThreadNumber) :TP(nullptr), ThreadNumber(inputThreadNumber), m_listen(INVALID_SOCKET), m_iocp(nullptr), PoolCleanLimit(1), CleanTimeInterval(1), stopFlag(true) {}
+			Server(const std::size_t& inputThreadNumber) :TP(nullptr), ThreadNumber(inputThreadNumber), m_listen(INVALID_SOCKET), m_iocp(nullptr), PoolCleanLimit(1), CleanTimeInterval(1), stopFlag(true) {
+				//以下是默认设置
+				SetMemoryPoolCleanLimit(20);//内存池待清理数量上限
+				SetCleanTimeInterval(60);//清理线程唤醒间隔(秒)
+				SetConnectionMaxLiveTime(30);//客户端连接最长存活时间(秒)
+			}
 
 			Server(const Server&) = delete;
 
 			virtual ~Server()noexcept {
-				Stop();				
+				try {
+					Stop();
+				}
+				catch (...) {}//宁愿内存泄漏也不要未定义行为
 			}
 
 		public:
-			static inline bool LoadSocketLib() {
-				return WinSock::Startup(2, 2);
+			static inline bool LoadSocketLib()noexcept {
+				try {
+					return WinSock::Startup(2, 2);
+				}
+				catch (...) { return false; }
 			}
 
-			static inline void UnloadSocketLib() {
-				WinSock::Cleanup();
+			static inline void UnloadSocketLib()noexcept {
+				try {
+					WinSock::Cleanup();
+				}
+				catch (...) {}
 			}
 
-			inline void SetListenAddr(const WinSock::Address& input) {
+			inline void SetListenAddr(const WinSock::Address& input)noexcept {
 				bindAddr = input;
 			}
 
-			inline void SetListenAddr(const std::string& ip, const int32_t& port) {
+			inline void SetListenAddr(const std::string& ip, const int32_t& port)noexcept {
 				bindAddr = WinSock::MakeAddr(ip, port);
 			}
 
@@ -406,13 +434,22 @@ namespace DC {
 				ConnectionTimeOut.store(input, std::memory_order_release);
 			}
 
-			bool Start(int32_t waitlimit) {
-				m_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-				if (m_iocp == NULL || m_iocp == nullptr) return false;
+			bool Start(int32_t waitlimit = 1) {//可以多次调用，不会出现错误
+				try {
+					Stop();
+				}
+				catch (...) { return false; }
+
 				if (waitlimit < 1) waitlimit = 1;
-				TP = new DC::ThreadPool(ThreadNumber + 2);//cleaner和listener
+
+				if (isNull(m_iocp))
+					m_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+				if (isNull(m_iocp)) return false;
+
+				if (isNull(TP))
+					TP = new DC::ThreadPool(ThreadNumber + 2);//cleaner和listener
 				TP->start();
-				
+
 				auto wait = TP->async(&Server::ListenerThread, this);
 				if (wait.wait_for(std::chrono::seconds(waitlimit)) != std::future_status::timeout)
 					return false;
@@ -426,27 +463,33 @@ namespace DC {
 				return true;
 			}
 
-			inline void Stop() {
+			inline void Stop() {//可以多次调用，不会出现错误
+                //向工作线程发送停止信号
+				std::vector<DC::IOCP::PICptr> temp;
+				for (int i = 0; i < ThreadNumber; i++)
+					temp.emplace_back(new(std::nothrow) DC::IOCP::PerIOContext(1));
+				for (auto& p : temp)
+					PostExit(p.get());
+
 				//停止监听
-				closesocket(m_listen);
+				if (m_listen != INVALID_SOCKET)
+					closesocket(m_listen);
+
 				//向清洁线程发送停止信号
 				stopFlag.store(true, std::memory_order_release);
 				cleanerCV.notify_all();
-				//向工作线程发送停止信号
-				std::vector<DC::IOCP::PICptr> temp;
-				for (int i = 0; i < ThreadNumber; i++)
-					temp.emplace_back(new DC::IOCP::PerIOContext(getSendBufferSize()));
-				for (auto& p : temp)
-					PostExit(p.get());
+
 				//关闭完成端口
-				if (m_iocp != nullptr&&m_iocp != NULL) { CloseHandle(m_iocp); m_iocp = nullptr; }
+				if (!isNull(m_iocp)) { CloseHandle(m_iocp); m_iocp = nullptr; }
+
 				//关闭并删除线程池
-				if (TP != nullptr) { delete TP; TP = nullptr; }
+				if (!isNull(TP)) { delete TP; TP = nullptr; }
+
 				//清空客户端SOCKET
 				PSC_Pool.clear();
 			}
 
-			static inline void loop() {//永远不会返回
+			static inline void loop()noexcept {//永远不会返回
 				while (true)
 					std::this_thread::sleep_for(std::chrono::minutes(9710));
 			}
@@ -456,20 +499,20 @@ namespace DC {
 				return 1024;
 			}
 
-			virtual inline const std::size_t getSendBufferSize()noexcept {//send 缓冲区
-				return 1024;
-			}
+			virtual void OnRecv(DC::IOCP::PerSocketContext*, const std::string&, const DC::WinSock::Address&) {}
 
-			virtual void OnRecv(DC::IOCP::PerSocketContext *PSC, const std::string& recvstr, const DC::WinSock::Address& ClientAddr) {}
+			virtual void OnSend(DC::IOCP::PerSocketContext*, const std::string&, const DC::WinSock::Address&) {}
 
-			virtual void OnSend(DC::IOCP::PerSocketContext *PSC, const std::string& sendstr, const DC::WinSock::Address& ClientAddr) {}
+			virtual void OnError(const DC::DC_ERROR&) {}
 
-			inline bool Send(PerSocketContext *client, const std::string& sendthis) {
-				return PostSend(client, client->make(getSendBufferSize()), sendthis);
+			inline bool Send(PerSocketContext *client, const std::string& sendthis)noexcept {
+				return PostSend(client, client->make(sendthis.size() + 1), sendthis);
 			}
 
 		private:
-			bool PostRecv(PerSocketContext *PSC, PerIOContext *PIC) {
+			bool PostRecv(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
+				if (isNull(PSC) || isNull(PIC)) return false;
+
 				DWORD dwFlags = 0;
 				DWORD dwBytes = 0;
 
@@ -485,12 +528,25 @@ namespace DC {
 				return true;
 			}
 
-			inline bool DoRecv(PerSocketContext *PSC, PerIOContext *PIC) {
-				OnRecv(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
+			inline bool DoRecv(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
+				if (isNull(PSC) || isNull(PIC)) return false;
+
+				try {
+					OnRecv(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
+				}
+				catch (const DC::DC_ERROR& err) {
+					this->OnError(err);
+				}
+				catch (...) {
+					this->OnError(DC::DC_ERROR("OnRecv", "uncaught exception", -1));
+				}
+
 				return PostRecv(PSC, PIC);
 			}
 
-			bool PostSend(PerSocketContext *PSC, PerIOContext *PIC, const std::string& sendthis) {
+			bool PostSend(PerSocketContext *PSC, PerIOContext *PIC, const std::string& sendthis)noexcept {
+				if (isNull(PSC) || isNull(PIC)) return false;
+
 				DWORD dwFlags = 0;
 				DWORD dwBytes = sendthis.size();
 
@@ -509,12 +565,24 @@ namespace DC {
 				return true;
 			}
 
-			inline bool DoSend(PerSocketContext *PSC, PerIOContext *PIC) {
-				OnSend(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
-				if (!PSC->drop(PIC)) throw DC_ERROR("DoSend", "", -1);
+			inline bool DoSend(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
+				if (isNull(PSC) || isNull(PIC)) return false;
+
+				try {
+					OnSend(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
+					PSC->drop(PIC);
+				}
+				catch (const DC::DC_ERROR& err) {
+					this->OnError(err);
+				}
+				catch (...) {
+					this->OnError(DC::DC_ERROR("OnSend", "uncaught exception", -1));
+				}
 			}
 
-			inline bool PostExit(PerIOContext *PIC) {
+			inline bool PostExit(PerIOContext *PIC)noexcept {
+				if (isNull(PIC)) return false;
+
 				PerIOContext *AcceptIoContext = PIC;
 				DWORD dwBytes = 0;
 				AcceptIoContext->m_opType = OperationType::NULL_POSTED;
@@ -523,7 +591,7 @@ namespace DC {
 				return false;
 			}
 
-			void WorkerThread() {
+			void WorkerThread()noexcept {
 				DWORD dwBytesTransfered = 0;
 				OVERLAPPED *pOverlapped = NULL;
 				PerSocketContext *pSocketContext = NULL;
@@ -532,10 +600,12 @@ namespace DC {
 					BOOL GQrv = GetQueuedCompletionStatus(m_iocp, &dwBytesTransfered,
 						reinterpret_cast<PULONG_PTR>(&pSocketContext), &pOverlapped, INFINITE);
 
-					if (NULL == pSocketContext) break;
-					if (!GQrv) {//遇到了错误
-						continue;
-					}
+					//PSC为空(一般意味着完成端口已关闭)
+					if (isNull(pSocketContext)) break;
+					//完成端口已关闭
+					if (isNull(m_iocp)) break;
+					//遇到了错误
+					if (!GQrv) continue;
 
 					PerIOContext *pIOContext = CONTAINING_RECORD(pOverlapped, PerIOContext, m_overlapped);
 
@@ -545,14 +615,15 @@ namespace DC {
 					}
 
 					switch (pIOContext->m_opType) {
-					case OperationType::ACCEPT_POSTED: {}break;
 					case OperationType::RECV_POSTED: {
 						DoRecv(pSocketContext, pIOContext);
 					}break;
 					case OperationType::SEND_POSTED: {
 						DoSend(pSocketContext, pIOContext);
 					}break;
-					case OperationType::NULL_POSTED: {return; }break;
+					case OperationType::NULL_POSTED: {
+						return; 
+					}break;
 					}
 				}
 			}
@@ -571,66 +642,74 @@ namespace DC {
 					acceptSocket = INVALID_SOCKET;
 					if (!DC::WinSock::Accept(acceptSocket, m_listen, ClientAddr)) { closesocket(m_listen); return false; }
 
-					PSCptr ptr(new PerSocketContext(PoolCleanLimit.load(std::memory_order_acquire)));
+					PSCptr ptr(new(std::nothrow) PerSocketContext(PoolCleanLimit.load(std::memory_order_acquire)));
+					if (!ptr) { closesocket(acceptSocket); continue; }//new失败
 					ptr->m_sock = acceptSocket;
 					ptr->m_clientAddr = ClientAddr;
-					if (!AssociateWithIOCP(ptr.get())) continue;
-					if (!PostRecv(ptr.get(), ptr->make(getRecvBufferSize()))) continue;
-					PSC_Pool.put(std::move(ptr));
+					if (!AssociateWithIOCP(ptr.get())) { closesocket(acceptSocket); continue; }//绑定到完成端口失败
+					if (!PostRecv(ptr.get(), ptr->make(getRecvBufferSize()))) { closesocket(acceptSocket); continue; }//PostRecv失败
+					if (nullptr == PSC_Pool.put(std::move(ptr))) { closesocket(acceptSocket); continue; }//记录客户端失败
 				}
 
 				return true;
 			}
 
-			void CleanerThread(const std::chrono::seconds limits) {
-				//std::cout << "cleaner开始\n";
-				DC::timer timer;
-				std::chrono::seconds templimits;
-				while (true) {
-					templimits = limits;
-					timer.reset();
-					timer.start();
-					//std::cout << "cleaner检查\n";
-					std::unique_lock<std::mutex> lock(cleanerMut);
+			void CleanerThread(const std::chrono::seconds limits)noexcept {
+				try {
+					DC::timer timer;
+					std::chrono::seconds templimits;
 					while (true) {
-						if (cleanerCV.wait_for(lock, templimits) == std::cv_status::timeout) 
-							if (stopFlag == true)
-							{
-								//std::cout << "cleaner退出\n";
-								return;
-							}
-							else//工作
-								break;
-						timer.stop();
-						if (std::chrono::seconds(timer.getsecond()) >= templimits)
-							if (stopFlag == true)//真唤醒
-							{
-								//std::cout << "cleaner退出\n";
-								return;
-							}
-							else//假唤醒
-								break;
-						//假唤醒
-						templimits = templimits - std::chrono::seconds(timer.getsecond());
+						templimits = limits;
 						timer.reset();
 						timer.start();
-					}
-					//std::cout << "cleaner工作\n";
+						std::unique_lock<std::mutex> lock(cleanerMut);
+						while (true) {
+							if (cleanerCV.wait_for(lock, templimits) == std::cv_status::timeout)
+								if (stopFlag.load(std::memory_order_acquire) == true)
+									return;//退出信号
+								else
+									break;//时间到，开始工作
 
-					std::unique_lock<std::mutex> lockPSC(PSC_Pool.writeLock);
-					for (auto& p : PSC_Pool.m) {
-						if (p.get() == nullptr) continue;
-						if (p->getTimerSeconds() >= ConnectionTimeOut.load(std::memory_order_acquire)) {
-							p->CloseSock();
-							PSC_Pool.drop_nolock(p.get());
+							timer.stop();
+
+							if (stopFlag.load(std::memory_order_acquire) == true)
+								return;//退出信号
+
+							if (std::chrono::seconds(timer.getsecond()) >= templimits)
+								break;//睡过头了
+
+							//假唤醒，计算剩余时间开始新一轮等待
+							templimits = templimits - std::chrono::seconds(timer.getsecond());
+							timer.reset();
+							timer.start();
 						}
+
+						std::unique_lock<std::mutex> lockPSC(PSC_Pool.writeLock);
+						for (auto& p : PSC_Pool.m) {
+							if (p.get() == nullptr) continue;
+							if (p->getTimerSeconds() >= ConnectionTimeOut.load(std::memory_order_acquire)) {
+								p->CloseSock();
+								PSC_Pool.drop_nolock(p.get());
+							}
+						}
+						lockPSC.unlock();
+						PSC_Pool.clean();
 					}
-					lockPSC.unlock();
-					PSC_Pool.clean();
+				}
+				//抛异常的话直接退出
+				catch (const DC_ERROR& err) {
+					OnError(err);
+					return;
+				}
+				catch (...) {
+					OnError(DC::DC_ERROR("CleanerThread", "uncaught exception", -1));
+					return; 
 				}
 			}
 
-			inline bool AssociateWithIOCP(PerSocketContext* input) {
+			inline bool AssociateWithIOCP(PerSocketContext* input)noexcept {
+				if (isNull(input)) return false;
+
 				HANDLE hTemp = CreateIoCompletionPort(reinterpret_cast<HANDLE>(input->m_sock), m_iocp, reinterpret_cast<DWORD>(input), 0);
 
 				if (NULL == hTemp)
@@ -638,7 +717,13 @@ namespace DC {
 				return true;
 			}
 
-		protected:
+			template <typename T>
+			inline bool isNull(T ptr)noexcept {
+				if (ptr == nullptr || ptr == NULL) return true;
+				return false;
+			}
+
+		private:
 			HANDLE m_iocp;
 			SOCKET m_listen;
 			ThreadPool *TP;
