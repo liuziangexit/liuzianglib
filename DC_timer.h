@@ -2,8 +2,8 @@
 #ifndef liuzianglib_timer
 #define liuzianglib_timer
 #include <time.h>
-//Version 2.4.2
-//20170330
+//Version 2.4.2V19
+//20170421
 
 namespace DC {
 
@@ -33,16 +33,16 @@ namespace DC {
 			res = 0;
 		}
 
-		inline time_t getsecond() {
+		inline time_t getsecond()const {
 			return getclock() / CLOCKS_PER_SEC;
 		}
 
-		inline time_t getms() {//这个和平台相关，在VS15下clock_t就是毫秒,其他平台可能需要修改
+		inline time_t getms()const {//这个和平台相关，在VS15下clock_t就是毫秒,其他平台可能需要修改
 			return getclock();
 		}
 
 	private:
-		inline clock_t getclock() {
+		inline clock_t getclock()const {
 			if (status == false)
 				return res;
 			decltype(res) temp = res;

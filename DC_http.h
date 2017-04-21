@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.2V15
-//20170416
+//Version 2.4.2V19
+//20170421
 
 namespace DC {
 
@@ -415,12 +415,18 @@ namespace DC {
 			}
 
 			auto emptylineLoca = DC::STR::find(input, httpSpace::emptyline);
-			if (emptylineLoca.getplace_ref().empty()) 
-				headersraw = DC::STR::getSub(input, titleend, input.size());
-			else
-				headersraw = DC::STR::getSub(input, titleend, *emptylineLoca.getplace_ref().begin());
+			try {
+				if (emptylineLoca.getplace_ref().empty())
+					headersraw = DC::STR::getSub(input, titleend, input.size());
+				else
+					headersraw = DC::STR::getSub(input, titleend, *emptylineLoca.getplace_ref().begin());
+			}
+			catch (...) {}
 
-			if (!emptylineLoca.getplace_ref().empty()) bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline) - 1, input.size());
+			try {
+				if (!emptylineLoca.getplace_ref().empty()) bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline) - 1, input.size());
+			}
+			catch (...) {}
 
 			return request(httpSpace::title(httpSpace::title_deserialization<request>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
 		}
@@ -435,12 +441,18 @@ namespace DC {
 			}
 
 			auto emptylineLoca = DC::STR::find(input, httpSpace::emptyline);
-			if (emptylineLoca.getplace_ref().empty())
-				headersraw = DC::STR::getSub(input, titleend, input.size());
-			else
-				headersraw = DC::STR::getSub(input, titleend, *emptylineLoca.getplace_ref().begin());
+			try {
+				if (emptylineLoca.getplace_ref().empty())
+					headersraw = DC::STR::getSub(input, titleend, input.size());
+				else
+					headersraw = DC::STR::getSub(input, titleend, *emptylineLoca.getplace_ref().begin());
+			}
+			catch (...) {}
 
-			if (!emptylineLoca.getplace_ref().empty()) bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline) - 1, input.size());
+			try {
+				if (!emptylineLoca.getplace_ref().empty()) bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline) - 1, input.size());
+			}
+			catch (...) {}
 
 			return response(httpSpace::title(httpSpace::title_deserialization<response>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
 		}
