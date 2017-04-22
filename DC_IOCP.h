@@ -9,7 +9,7 @@
 #include "DC_ThreadPool.h"
 #include "DC_timer.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V21
+//Version 2.4.2V22
 //20170422
 
 namespace DC {
@@ -197,7 +197,7 @@ namespace DC {
 			private:
 				void realClean() {
 					for (auto i = m.begin(); i != m.end();) {
-						if (!(*i)) { i = m.erase(i); continue; }
+						if (!(*i)) { i = DC::vector_fast_erase(m, i); continue; }
 						i++;
 					}
 				}
@@ -302,7 +302,7 @@ namespace DC {
 			private:
 				void realClean() {
 					for (auto i = m.begin(); i != m.end();) {
-						if (!(*i)) { i = m.erase(i); continue; }
+						if (!(*i)) { i = DC::vector_fast_erase(m, i); continue; }
 						i++;
 					}
 				}
@@ -363,9 +363,9 @@ namespace DC {
 				}
 			}
 
-			inline time_t getTimerSeconds() {
+			inline time_t getTimerMSeconds() {
 				std::unique_lock<std::mutex> LtimerM(timerM);
-				return timer.getsecond();
+				return timer.getms();
 			}
 
 		public:
@@ -384,9 +384,10 @@ namespace DC {
 		public:
 			Server(const std::size_t& inputThreadNumber) :TP(nullptr), ThreadNumber(inputThreadNumber), m_listen(INVALID_SOCKET), m_iocp(nullptr), PoolCleanLimit(1), CleanTimeInterval(1), stopFlag(true) {
 				//以下是默认设置
-				SetMemoryPoolCleanLimit(20);//内存池待清理数量上限
-				SetCleanTimeInterval(60);//清理线程唤醒间隔(秒)
-				SetConnectionMaxLiveTime(30);//客户端连接最长存活时间(秒)
+				SetMemoryPoolCleanLimit(20);
+				SetCleanTimeInterval(15000);//15秒
+				SetConnectionMaxLiveTime(30);//30秒
+				this->SetCleanerMaxBlockTime(10000);//10秒
 			}
 
 			Server(const Server&) = delete;
@@ -421,17 +422,21 @@ namespace DC {
 				bindAddr = WinSock::MakeAddr(ip, port);
 			}
 
-			inline void SetMemoryPoolCleanLimit(const int32_t& input) {
+			inline void SetMemoryPoolCleanLimit(const int32_t& input) {//设定内存池中待清理的项目数量上限。
 				PoolCleanLimit.store(input, std::memory_order_release);
 				PSC_Pool.setCleanLimit(input);
 			}
 
-			inline void SetCleanTimeInterval(const int32_t& input) {
+			inline void SetCleanTimeInterval(const int32_t& input) {//设定清洁线程唤醒间隔，清洁线程被唤醒后将会检查是否有存活时间超过预定的最长存活时间的客户端，如果有，则会释放它们。单位是毫秒。
 				CleanTimeInterval.store(input, std::memory_order_release);
 			}
 
-			inline void SetConnectionMaxLiveTime(const int32_t& input) {
+			inline void SetConnectionMaxLiveTime(const int32_t& input) {//设定客户端连接最长存活时间，存活时间超过或等于此设定的客户端将会被强行释放。单位是秒。
 				ConnectionTimeOut.store(input, std::memory_order_release);
+			}
+
+			inline void SetCleanerMaxBlockTime(const int32_t& input) {//设定清洁线程最长阻塞时间，在这段时间内新的客户端连接将会被拒绝。单位是毫秒。
+				CleanerMaxBlockMS.store(input, std::memory_order_release);
 			}
 
 			bool Start(int32_t waitlimit = 1) {//可以多次调用，不会出现错误
@@ -454,7 +459,7 @@ namespace DC {
 				if (wait.wait_for(std::chrono::seconds(waitlimit)) != std::future_status::timeout)
 					return false;
 
-				TP->async(&Server::CleanerThread, this, std::chrono::seconds(CleanTimeInterval.load(std::memory_order_acquire)));
+				TP->async(&Server::CleanerThread, this, std::chrono::milliseconds(CleanTimeInterval.load(std::memory_order_acquire)), CleanerMaxBlockMS.load(std::memory_order_acquire));
 
 				for (std::size_t i = 0; i < ThreadNumber; i++)
 					TP->async(&Server::WorkerThread, this);
@@ -656,10 +661,10 @@ namespace DC {
 				return true;
 			}
 
-			void CleanerThread(const std::chrono::seconds limits)noexcept {
+			void CleanerThread(const std::chrono::milliseconds limits, const int32_t& maxblocktime)noexcept {
 				try {
 					DC::timer timer;
-					std::chrono::seconds templimits;
+					std::chrono::milliseconds templimits;
 					while (true) {
 						templimits = limits;
 						timer.reset();
@@ -677,22 +682,24 @@ namespace DC {
 							if (stopFlag.load(std::memory_order_acquire) == true)
 								return;//退出信号
 
-							if (std::chrono::seconds(timer.getsecond()) >= templimits)
+							if (std::chrono::milliseconds(timer.getms()) >= templimits)
 								break;//睡过头了
 
 							//假唤醒，计算剩余时间开始新一轮等待
-							templimits = templimits - std::chrono::seconds(timer.getsecond());
+							templimits = templimits - std::chrono::milliseconds(timer.getms());
 							timer.reset();
 							timer.start();
 						}
-
 						std::unique_lock<std::mutex> lockPSC(PSC_Pool.writeLock);
+						timer.reset();
+						timer.start();
 						for (auto& p : PSC_Pool.m) {
 							if (p.get() == nullptr) continue;
-							if (p->getTimerSeconds() >= ConnectionTimeOut.load(std::memory_order_acquire)) {
+							if (p->getTimerMSeconds() >= ConnectionTimeOut.load(std::memory_order_acquire)) {
 								p->CloseSock();
 								PSC_Pool.drop_nolock(p.get());
 							}
+							if (timer.getms() >= maxblocktime) break;
 						}
 						lockPSC.unlock();
 						PSC_Pool.clean();
@@ -705,7 +712,7 @@ namespace DC {
 				}
 				catch (...) {
 					OnError(DC::DC_ERROR("CleanerThread", "uncaught exception", -1));
-					return; 
+					return;
 				}
 			}
 
@@ -730,7 +737,7 @@ namespace DC {
 			SOCKET m_listen;
 			ThreadPool *TP;
 			const std::size_t ThreadNumber;
-			std::atomic_int32_t PoolCleanLimit, CleanTimeInterval, ConnectionTimeOut;//内存池待清理数量上限，检查客户端连接是否超时间隔，客户端连接最长存活时间
+			std::atomic_int32_t PoolCleanLimit, CleanTimeInterval, ConnectionTimeOut, CleanerMaxBlockMS;//内存池待清理数量上限，检查客户端连接是否超时间隔，客户端连接最长存活时间
 			std::atomic_bool stopFlag;
 			std::condition_variable cleanerCV;
 			std::mutex cleanerMut;

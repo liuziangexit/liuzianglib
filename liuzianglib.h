@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.2V15
-//20170416
+//Version 2.4.2V22
+//20170422
 
 #define GET_FIRST_PARAMETERS 0//适用于GetCommandLineParameters
 
@@ -186,6 +186,25 @@ namespace DC {
 		bool OK;
 		std::string name, value;
 	};
+
+	template <typename T, typename U>
+	inline U vector_fast_erase(T& vec, const U& it) {//返回值与vector::erase()意义一致
+		if (vec.empty()) return vec.end();
+		auto distance = std::distance(vec.begin(), it);
+		if (it != vec.rbegin().base()) std::swap(*it, *vec.rbegin());
+		vec.pop_back();
+		if (vec.empty()) return vec.end();
+		U rv = vec.begin();
+		std::advance(rv, distance);
+		return rv;
+	}
+
+	template <typename T, typename U>
+	inline void vector_fast_erase_no_return(T& vec, const U& it) {
+		if (vec.empty()) return vec.end();
+		if (it != vec.rbegin().base()) std::swap(*it, *vec.rbegin());
+		vec.pop_back();
+	}
 
 }
 
