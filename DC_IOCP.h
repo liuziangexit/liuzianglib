@@ -9,8 +9,8 @@
 #include "DC_ThreadPool.h"
 #include "DC_timer.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V22
-//20170422
+//Version 2.4.2V23
+//20170423
 
 namespace DC {
 
@@ -357,10 +357,20 @@ namespace DC {
 
 		public:
 			inline void CloseSock() {
-				if (m_sock != INVALID_SOCKET) {
-					closesocket(m_sock);
+				if (m_sock != INVALID_SOCKET) {					
+					std::unique_lock<std::mutex> lock(SockM);
+					closesocket(m_sock);					
 					m_sock = INVALID_SOCKET;
 				}
+			}
+
+			inline const SOCKET& getSock()const noexcept {
+				return m_sock;
+			}
+
+			inline void setSock(const SOCKET& input) {
+				std::unique_lock<std::mutex> lock(SockM);
+				m_sock = input;
 			}
 
 			inline time_t getTimerMSeconds() {
@@ -369,11 +379,11 @@ namespace DC {
 			}
 
 		public:
-			SOCKET m_sock;
 			SOCKADDR_IN m_clientAddr;
 			IOCPSpace::unique_id uniqueid;
 		private:
-			std::mutex timerM;
+			SOCKET m_sock;
+			std::mutex timerM, SockM;
 			DC::timer timer;
 		};
 
@@ -524,7 +534,7 @@ namespace DC {
 				PIC->resetBuffer();
 				PIC->m_opType = RECV_POSTED;
 
-				int nBytesRecv = WSARecv(PSC->m_sock, &PIC->m_wsabuf, 1, &dwBytes, &dwFlags, &PIC->m_overlapped, NULL);
+				int nBytesRecv = WSARecv(PSC->getSock(), &PIC->m_wsabuf, 1, &dwBytes, &dwFlags, &PIC->m_overlapped, NULL);
 
 				if (SOCKET_ERROR == nBytesRecv) {
 					if (WSA_IO_PENDING != WSAGetLastError())
@@ -561,7 +571,7 @@ namespace DC {
 				memcpy(PIC->m_wsabuf.buf, sendthis.c_str(), sendthis.size());
 				PIC->m_opType = SEND_POSTED;
 
-				int nBytesRecv = WSASend(PSC->m_sock, &PIC->m_wsabuf, 1, &dwBytes, dwFlags, &PIC->m_overlapped, NULL);
+				int nBytesRecv = WSASend(PSC->getSock(), &PIC->m_wsabuf, 1, &dwBytes, dwFlags, &PIC->m_overlapped, NULL);
 
 				if (SOCKET_ERROR == nBytesRecv) {
 					if (WSA_IO_PENDING != WSAGetLastError())
@@ -636,29 +646,34 @@ namespace DC {
 			}
 
 			bool ListenerThread()noexcept {
-				WinSock::SocketInit_TCP(m_listen);
-				if (m_listen == SOCKET_ERROR) return false;
+				try {
+					WinSock::SocketInit_TCP(m_listen);
+					if (m_listen == SOCKET_ERROR) return false;
 
-				if (!WinSock::Bind(m_listen, bindAddr)) { closesocket(m_listen); return false; }
-				if (!WinSock::Listen(m_listen, SOMAXCONN)) { closesocket(m_listen); return false; }
+					if (!WinSock::Bind(m_listen, bindAddr)) { closesocket(m_listen); return false; }
+					if (!WinSock::Listen(m_listen, SOMAXCONN)) { closesocket(m_listen); return false; }
 
-				SOCKET acceptSocket;
-				DC::WinSock::Address ClientAddr;
+					SOCKET acceptSocket;
+					DC::WinSock::Address ClientAddr;
 
-				while (true) {
-					acceptSocket = INVALID_SOCKET;
-					if (!DC::WinSock::Accept(acceptSocket, m_listen, ClientAddr)) { closesocket(m_listen); return false; }
+					while (true) {
+						acceptSocket = INVALID_SOCKET;
+						if (!DC::WinSock::Accept(acceptSocket, m_listen, ClientAddr)) { closesocket(m_listen); return false; }
 
-					PSCptr ptr(new(std::nothrow) PerSocketContext(PoolCleanLimit.load(std::memory_order_acquire)));
-					if (!ptr) { closesocket(acceptSocket); continue; }//new失败
-					ptr->m_sock = acceptSocket;
-					ptr->m_clientAddr = ClientAddr;
-					if (!AssociateWithIOCP(ptr.get())) { closesocket(acceptSocket); continue; }//绑定到完成端口失败
-					if (!PostRecv(ptr.get(), ptr->make(getRecvBufferSize()))) { closesocket(acceptSocket); continue; }//PostRecv失败
-					if (nullptr == PSC_Pool.put(std::move(ptr))) { closesocket(acceptSocket); continue; }//记录客户端失败
+						PSCptr ptr(new(std::nothrow) PerSocketContext(PoolCleanLimit.load(std::memory_order_acquire)));
+						if (!ptr) { closesocket(acceptSocket); continue; }//new失败
+						ptr->setSock(acceptSocket);
+						ptr->m_clientAddr = ClientAddr;
+						if (!AssociateWithIOCP(ptr.get())) { closesocket(acceptSocket); continue; }//绑定到完成端口失败
+						if (!PostRecv(ptr.get(), ptr->make(getRecvBufferSize()))) { closesocket(acceptSocket); continue; }//PostRecv失败
+						if (nullptr == PSC_Pool.put(std::move(ptr))) { closesocket(acceptSocket); continue; }//记录客户端失败
+					}
+
+					return true;
 				}
-
-				return true;
+				catch (DC::DC_ERROR& err) { OnError(err); return false; }
+				catch (...) { OnError(DC::DC_ERROR("ListenerThread", "unknown error", -1)); return false; }
+				return false;
 			}
 
 			void CleanerThread(const std::chrono::milliseconds limits, const int32_t& maxblocktime)noexcept {
@@ -719,7 +734,7 @@ namespace DC {
 			inline bool AssociateWithIOCP(PerSocketContext* input)noexcept {
 				if (isNull(input)) return false;
 
-				HANDLE hTemp = CreateIoCompletionPort(reinterpret_cast<HANDLE>(input->m_sock), m_iocp, reinterpret_cast<DWORD>(input), 0);
+				HANDLE hTemp = CreateIoCompletionPort(reinterpret_cast<HANDLE>(input->getSock()), m_iocp, reinterpret_cast<DWORD>(input), 0);
 
 				if (NULL == hTemp)
 					return false;
