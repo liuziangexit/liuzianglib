@@ -9,8 +9,8 @@
 #include "DC_ThreadPool.h"
 #include "DC_timer.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V20
-//20170421
+//Version 2.4.2V21
+//20170422
 
 namespace DC {
 
@@ -578,6 +578,7 @@ namespace DC {
 				catch (...) {
 					this->OnError(DC::DC_ERROR("OnSend", "uncaught exception", -1));
 				}
+				return true;
 			}
 
 			inline bool PostExit(PerIOContext *PIC)noexcept {
@@ -609,6 +610,7 @@ namespace DC {
 
 					PerIOContext *pIOContext = CONTAINING_RECORD(pOverlapped, PerIOContext, m_overlapped);
 
+					//客户端已经断开连接
 					if (dwBytesTransfered == 0 && (pIOContext->m_opType == OperationType::SEND_POSTED || pIOContext->m_opType == OperationType::RECV_POSTED)) {
 						pSocketContext->CloseSock();
 						continue;
