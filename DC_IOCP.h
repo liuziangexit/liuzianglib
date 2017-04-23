@@ -9,7 +9,7 @@
 #include "DC_ThreadPool.h"
 #include "DC_timer.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V23
+//Version 2.4.2V24
 //20170423
 
 namespace DC {
@@ -43,6 +43,12 @@ namespace DC {
 				const int32_t uniqueid;
 			};
 
+			template <typename T>
+			inline bool isNull(T ptr)noexcept {
+				if (ptr == nullptr || ptr == NULL) return true;
+				return false;
+			}
+
 		}
 
 		enum OperationType { ACCEPT_POSTED, SEND_POSTED, RECV_POSTED, NULL_POSTED };
@@ -62,7 +68,8 @@ namespace DC {
 
 				m_wsabuf.len = buffersize;
 				if (buffersize != 0) {
-					m_wsabuf.buf = new char[buffersize];
+					m_wsabuf.buf = new(std::nothrow) char[buffersize];
+					if (IOCPSpace::isNull(m_wsabuf.buf)) throw DC::DC_ERROR("PerIOContext", "new operator error", -1);
 					resetBuffer();
 				}
 				else m_wsabuf.buf = nullptr;
@@ -80,7 +87,8 @@ namespace DC {
 			~PerIOContext() {}
 
 		public:
-			inline void resetBuffer() {
+			inline void resetBuffer()noexcept {
+				if (IOCPSpace::isNull(m_wsabuf.buf)) return;
 				memset(m_wsabuf.buf, NULL, m_wsabuf.len);
 			}
 
@@ -94,7 +102,7 @@ namespace DC {
 			void destroy() {
 				CloseSock();
 
-				if (m_wsabuf.buf != nullptr) {
+				if (!IOCPSpace::isNull(m_wsabuf.buf)) {
 					delete[] m_wsabuf.buf;
 				}
 				delete this;
@@ -396,8 +404,8 @@ namespace DC {
 				//以下是默认设置
 				SetMemoryPoolCleanLimit(20);
 				SetCleanTimeInterval(15000);//15秒
-				SetConnectionMaxLiveTime(30);//30秒
-				this->SetCleanerMaxBlockTime(10000);//10秒
+				SetConnectionMaxLiveTime(30000);//30秒
+				SetCleanerMaxBlockTime(10000);//10秒
 			}
 
 			Server(const Server&) = delete;
@@ -441,7 +449,7 @@ namespace DC {
 				CleanTimeInterval.store(input, std::memory_order_release);
 			}
 
-			inline void SetConnectionMaxLiveTime(const int32_t& input) {//设定客户端连接最长存活时间，存活时间超过或等于此设定的客户端将会被强行释放。单位是秒。
+			inline void SetConnectionMaxLiveTime(const int32_t& input) {//设定客户端连接最长存活时间，存活时间超过或等于此设定的客户端将会被强行释放。单位是毫秒。
 				ConnectionTimeOut.store(input, std::memory_order_release);
 			}
 
@@ -457,12 +465,16 @@ namespace DC {
 
 				if (waitlimit < 1) waitlimit = 1;
 
-				if (isNull(m_iocp))
+				if (IOCPSpace::isNull(m_iocp))
 					m_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-				if (isNull(m_iocp)) return false;
+				if (IOCPSpace::isNull(m_iocp)) return false;
 
-				if (isNull(TP))
-					TP = new DC::ThreadPool(ThreadNumber + 2);//cleaner和listener
+				if (IOCPSpace::isNull(TP)) {
+					try {
+						TP = new DC::ThreadPool(ThreadNumber + 2);//cleaner和listener
+					}
+					catch (...) { OnError(DC::DC_ERROR("Start", "new DC::ThreadPool error", -1)); return false; }
+				}
 				TP->start();
 
 				auto wait = TP->async(&Server::ListenerThread, this);
@@ -482,7 +494,7 @@ namespace DC {
                 //向工作线程发送停止信号
 				std::vector<DC::IOCP::PICptr> temp;
 				for (int i = 0; i < ThreadNumber; i++)
-					temp.emplace_back(new(std::nothrow) DC::IOCP::PerIOContext(1));
+					temp.emplace_back(new DC::IOCP::PerIOContext(1));
 				for (auto& p : temp)
 					PostExit(p.get());
 
@@ -495,10 +507,10 @@ namespace DC {
 				cleanerCV.notify_all();
 
 				//关闭完成端口
-				if (!isNull(m_iocp)) { CloseHandle(m_iocp); m_iocp = nullptr; }
+				if (!IOCPSpace::isNull(m_iocp)) { CloseHandle(m_iocp); m_iocp = nullptr; }
 
 				//关闭并删除线程池
-				if (!isNull(TP)) { delete TP; TP = nullptr; }
+				if (!IOCPSpace::isNull(TP)) { delete TP; TP = nullptr; }
 
 				//清空客户端SOCKET
 				PSC_Pool.clear();
@@ -526,7 +538,7 @@ namespace DC {
 
 		private:
 			bool PostRecv(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
-				if (isNull(PSC) || isNull(PIC)) return false;
+				if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC)) return false;
 
 				DWORD dwFlags = 0;
 				DWORD dwBytes = 0;
@@ -544,7 +556,7 @@ namespace DC {
 			}
 
 			inline bool DoRecv(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
-				if (isNull(PSC) || isNull(PIC)) return false;
+				if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC)) return false;
 
 				try {
 					OnRecv(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
@@ -560,7 +572,7 @@ namespace DC {
 			}
 
 			bool PostSend(PerSocketContext *PSC, PerIOContext *PIC, const std::string& sendthis)noexcept {
-				if (isNull(PSC) || isNull(PIC)) return false;
+				if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC)) return false;
 
 				DWORD dwFlags = 0;
 				DWORD dwBytes = sendthis.size();
@@ -581,7 +593,7 @@ namespace DC {
 			}
 
 			inline bool DoSend(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
-				if (isNull(PSC) || isNull(PIC)) return false;
+				if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC)) return false;
 
 				try {
 					OnSend(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
@@ -597,7 +609,7 @@ namespace DC {
 			}
 
 			inline bool PostExit(PerIOContext *PIC)noexcept {
-				if (isNull(PIC)) return false;
+				if (IOCPSpace::isNull(PIC)) return false;
 
 				PerIOContext *AcceptIoContext = PIC;
 				DWORD dwBytes = 0;
@@ -619,7 +631,7 @@ namespace DC {
 					//PSC为空(一般意味着完成端口已关闭)
 					if (isNull(pSocketContext)) break;
 					//完成端口已关闭
-					if (isNull(m_iocp)) break;
+					if (IOCPSpace::isNull(m_iocp)) break;
 					//遇到了错误
 					if (!GQrv) continue;
 
@@ -660,8 +672,25 @@ namespace DC {
 						acceptSocket = INVALID_SOCKET;
 						if (!DC::WinSock::Accept(acceptSocket, m_listen, ClientAddr)) { closesocket(m_listen); return false; }
 
-						PSCptr ptr(new(std::nothrow) PerSocketContext(PoolCleanLimit.load(std::memory_order_acquire)));
-						if (!ptr) { closesocket(acceptSocket); continue; }//new失败
+						PSCptr ptr;
+						try {
+							ptr.reset(new PerSocketContext(PoolCleanLimit.load(std::memory_order_acquire)));
+						}
+						catch (std::bad_alloc&) {
+							OnError(DC::DC_ERROR("ListenerThread", "new operator error", -1));
+							closesocket(acceptSocket); 
+							continue;
+						}
+						catch (DC::DC_ERROR& err) {
+							OnError(err);
+							closesocket(acceptSocket);
+							continue;
+						}
+						catch (...) {
+							OnError(DC::DC_ERROR("ListenerThread", "unknown error", -1));
+							closesocket(acceptSocket);
+							continue;
+						}
 						ptr->setSock(acceptSocket);
 						ptr->m_clientAddr = ClientAddr;
 						if (!AssociateWithIOCP(ptr.get())) { closesocket(acceptSocket); continue; }//绑定到完成端口失败
@@ -709,7 +738,7 @@ namespace DC {
 						timer.reset();
 						timer.start();
 						for (auto& p : PSC_Pool.m) {
-							if (p.get() == nullptr) continue;
+							if (IOCPSpace::isNull(p.get())) continue;
 							if (p->getTimerMSeconds() >= ConnectionTimeOut.load(std::memory_order_acquire)) {
 								p->CloseSock();
 								PSC_Pool.drop_nolock(p.get());
@@ -739,12 +768,6 @@ namespace DC {
 				if (NULL == hTemp)
 					return false;
 				return true;
-			}
-
-			template <typename T>
-			inline bool isNull(T ptr)noexcept {
-				if (ptr == nullptr || ptr == NULL) return true;
-				return false;
 			}
 
 		private:
