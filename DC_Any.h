@@ -6,8 +6,8 @@
 #include <memory>
 #include <typeindex>
 #include "DC_ERROR.h"
-//Version 2.4.2V5
-//20170410
+//Version 2.4.2V25
+//20170424
 
 namespace DC {
 	
@@ -73,7 +73,7 @@ namespace DC {
 		}
 
 	private:
-		struct Base;
+		class Base;
 		typedef std::unique_ptr<Base> BasePtr;
 
 		class Base {

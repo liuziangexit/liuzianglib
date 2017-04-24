@@ -9,8 +9,8 @@
 #include "DC_ThreadPool.h"
 #include "DC_timer.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V24
-//20170423
+//Version 2.4.2V25
+//20170424
 
 namespace DC {
 
@@ -365,9 +365,9 @@ namespace DC {
 
 		public:
 			inline void CloseSock() {
-				if (m_sock != INVALID_SOCKET) {					
+				if (m_sock != INVALID_SOCKET) {
 					std::unique_lock<std::mutex> lock(SockM);
-					closesocket(m_sock);					
+					closesocket(m_sock);
 					m_sock = INVALID_SOCKET;
 				}
 			}
@@ -491,7 +491,7 @@ namespace DC {
 			}
 
 			inline void Stop() {//可以多次调用，不会出现错误
-                //向工作线程发送停止信号
+								//向工作线程发送停止信号
 				std::vector<DC::IOCP::PICptr> temp;
 				for (int i = 0; i < ThreadNumber; i++)
 					temp.emplace_back(new DC::IOCP::PerIOContext(1));
@@ -556,7 +556,7 @@ namespace DC {
 			}
 
 			inline bool DoRecv(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
-				if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC)) return false;
+				if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC) || PSC->getSock() == INVALID_SOCKET) return false;
 
 				try {
 					OnRecv(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
@@ -593,7 +593,7 @@ namespace DC {
 			}
 
 			inline bool DoSend(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
-				if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC)) return false;
+				if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC) || PSC->getSock() == INVALID_SOCKET) return false;
 
 				try {
 					OnSend(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
@@ -651,9 +651,12 @@ namespace DC {
 						DoSend(pSocketContext, pIOContext);
 					}break;
 					case OperationType::NULL_POSTED: {
-						return; 
+						return;
 					}break;
 					}
+
+					//检查是否超时，是则关闭连接
+					if (!IOCPSpace::isNull(pSocketContext)) { if (pSocketContext->getTimerMSeconds() >= ConnectionTimeOut.load(std::memory_order_acquire)) pSocketContext->CloseSock(); }
 				}
 			}
 
@@ -678,7 +681,7 @@ namespace DC {
 						}
 						catch (std::bad_alloc&) {
 							OnError(DC::DC_ERROR("ListenerThread", "new operator error", -1));
-							closesocket(acceptSocket); 
+							closesocket(acceptSocket);
 							continue;
 						}
 						catch (DC::DC_ERROR& err) {
@@ -729,7 +732,7 @@ namespace DC {
 							if (std::chrono::milliseconds(timer.getms()) >= templimits)
 								break;//睡过头了
 
-							//假唤醒，计算剩余时间开始新一轮等待
+									  //假唤醒，计算剩余时间开始新一轮等待
 							templimits = templimits - std::chrono::milliseconds(timer.getms());
 							timer.reset();
 							timer.start();
@@ -749,7 +752,6 @@ namespace DC {
 						PSC_Pool.clean();
 					}
 				}
-				//抛异常的话直接退出
 				catch (const DC_ERROR& err) {
 					OnError(err);
 					return;
