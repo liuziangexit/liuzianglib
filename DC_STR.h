@@ -8,8 +8,8 @@
 #include <sstream>
 #include "DC_ERROR.h"
 #include "DC_type.h"
-//Version 2.4.2V8
-//20170413
+//Version 2.4.2V26
+//20170430
 
 namespace DC {
 
@@ -75,42 +75,30 @@ namespace DC {
 
 			class ReplaceInfo final {
 			public:
-				ReplaceInfo() = default;
+				ReplaceInfo() :bei_ti_huan_howlong(0) {}
 
 				ReplaceInfo(const ReplaceInfo& input) :whererp(input.whererp), bei_ti_huan_howlong(input.bei_ti_huan_howlong) {}
 
-				ReplaceInfo(ReplaceInfo&& input)noexcept : whererp(std::move(input.whererp)), bei_ti_huan_howlong(input.bei_ti_huan_howlong) {}//这里size_t就不转换了因为他的移动本来就是拷贝，你再转一次还有额外的类型转换开销
-
-				ReplaceInfo& operator=(const ReplaceInfo& input) {
-					whererp = input.whererp;
-					bei_ti_huan_howlong = input.bei_ti_huan_howlong;
-					return *this;
-				}
-
-				ReplaceInfo& operator=(ReplaceInfo&& input)noexcept {
-					whererp = std::move(input.whererp);
-					bei_ti_huan_howlong = input.bei_ti_huan_howlong;
-					return *this;
+				ReplaceInfo(ReplaceInfo&& input)noexcept : whererp(std::move(input.whererp)), bei_ti_huan_howlong(input.bei_ti_huan_howlong) {
+					input.bei_ti_huan_howlong = 0;
 				}
 
 			public:
-				void setplace(const std::vector<std::size_t>& input) {
-					whererp = input;
+				template <typename T>
+				inline void setplace(T&& input) {
+					static_assert(std::is_same<std::decay_t<T>, std::decay_t<decltype(whererp)>>::value, "input type doesnt right");
+					whererp = std::forward<T>(input);
 				}
 
-				void setplace(std::vector<std::size_t>&& input) {
-					whererp = std::move(input);
-				}
-
-				void setsize(const std::size_t& input) {
+				inline void setsize(const std::size_t& input) {
 					bei_ti_huan_howlong = input;
 				}
 
-				const std::vector<std::size_t>& getplace_ref()const {
+				inline const std::vector<std::size_t>& getplace_ref()const {
 					return whererp;
 				}
 
-				std::size_t getsize()const {
+				inline std::size_t getsize()const {
 					return bei_ti_huan_howlong;
 				}
 
@@ -198,6 +186,7 @@ namespace DC {
 
 		inline STRSpace::ReplaceInfo find(const std::string& str, const std::string& findstr) {//使用 KMP 字符串匹配算法找到所有存在于 std::string str 中的 std::string find，并返回它们的位置
 			STRSpace::ReplaceInfo rv;
+			if (str.empty() || findstr.empty()) return rv;
 			rv.setsize(findstr.size());
 			rv.setplace(STRSpace::KMPSearch(findstr.c_str(), str.c_str()));
 			return rv;
