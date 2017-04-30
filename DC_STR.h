@@ -8,8 +8,8 @@
 #include <sstream>
 #include "DC_ERROR.h"
 #include "DC_type.h"
-//Version 2.4.2V26
-//20170430
+//Version 2.4.2V27
+//20170501
 
 namespace DC {
 
@@ -125,6 +125,51 @@ namespace DC {
 				std::string curLocale;
 			};
 
+			template <typename numtype> std::string::size_type Howmuchdig(numtype num) {//返回num的位数，比如num=1000时，返回4
+				int32_t i = 0;
+				while (num > 1) { num /= 10; i++; }
+				if (num == 1) return i + 1; else return i;
+			}
+
+			int getsomezero(const int& howmuch) {
+				if (howmuch < 0) return 0;
+				int returnvalue(1);
+				for (int i = 0; i < howmuch; returnvalue *= 10, i++);
+				return returnvalue;
+			}
+
+			inline int getbitvalue(const int& num, const int& which) {//从右往左
+				if (which <= 0) return -1;
+				if (which > Howmuchdig(num)) return -1;
+				return static_cast<int>(num / getsomezero(which - 1)) % 10;
+			}
+
+			inline bool isNegative(const int& num) {
+				if (num < 0) return true;
+				return false;
+			}
+
+			inline int getAbs(const int& num) {
+				if (num == 0) return 0;
+				if (isNegative(num)) return 0 - num;
+				return num;
+			}
+
+			inline char getCharFromNum(const int& num) {
+				switch (num) {
+				case 0:return '0';
+				case 1: return '1';
+				case 2: return '2';
+				case 3: return '3';
+				case 4: return '4';
+				case 5: return '5';
+				case 6: return '6';
+				case 7: return '7';
+				case 8: return '8';
+				case 9: return '9';
+				}
+			}
+
 		}
 
 		std::string insert(const std::string& str, const std::string& input, const std::size_t& wheretoput) {//在 std::string str[wheretoput] 之后插入 std::string input
@@ -214,7 +259,7 @@ namespace DC {
 		}
 
 		inline std::string getSub(const std::string& str, const DC::pos_type& startpos, const DC::pos_type& endpos) {//获取子串
-																												   //从startpos+1到endpos-1
+																													 //从startpos+1到endpos-1
 			if (endpos < startpos || endpos>str.size() || endpos < 0) throw DC::DC_ERROR("pos illegal", 0);
 			std::string returnvalue;
 			returnvalue.reserve(endpos - startpos);
@@ -268,6 +313,22 @@ namespace DC {
 			STRSpace::SetLocal setlocal;
 			wcstombs(toStr.get(), ws.c_str(), ws.size() + 1);
 			return std::string(toStr.get());
+		}
+
+		template <>
+		std::string toString<int>(const int& num) {
+			if (num == 0) return "0";
+			if (STRSpace::isNegative(num)) {
+				std::string rv("-");
+				auto abs = STRSpace::getAbs(num);
+				for (std::size_t i = STRSpace::Howmuchdig(abs); i > 0; i--)
+					rv.push_back(STRSpace::getCharFromNum(STRSpace::getbitvalue(abs, i)));
+				return rv;
+			}
+			std::string rv;
+			for (std::size_t i = STRSpace::Howmuchdig(num); i > 0; i--)
+				rv.push_back(STRSpace::getCharFromNum(STRSpace::getbitvalue(num, i)));
+			return rv;
 		}
 
 	}
