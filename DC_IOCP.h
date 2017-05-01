@@ -9,8 +9,8 @@
 #include "DC_ThreadPool.h"
 #include "DC_timer.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V25
-//20170424
+//Version 2.4.2V28
+//20170502
 
 namespace DC {
 
@@ -69,7 +69,7 @@ namespace DC {
 				m_wsabuf.len = buffersize;
 				if (buffersize != 0) {
 					m_wsabuf.buf = new(std::nothrow) char[buffersize];
-					if (IOCPSpace::isNull(m_wsabuf.buf)) throw DC::DC_ERROR("PerIOContext", "new operator error", -1);
+					if (IOCPSpace::isNull(m_wsabuf.buf)) throw DC::DC_ERROR("PerIOContext", "new operator error");
 					resetBuffer();
 				}
 				else m_wsabuf.buf = nullptr;
@@ -473,7 +473,7 @@ namespace DC {
 					try {
 						TP = new DC::ThreadPool(ThreadNumber + 2);//cleanerºÍlistener
 					}
-					catch (...) { OnError(DC::DC_ERROR("Start", "new DC::ThreadPool error", -1)); return false; }
+					catch (...) { OnError(DC::DC_ERROR("Start", "new DC::ThreadPool error")); return false; }
 				}
 				TP->start();
 
@@ -565,7 +565,7 @@ namespace DC {
 					this->OnError(err);
 				}
 				catch (...) {
-					this->OnError(DC::DC_ERROR("OnRecv", "uncaught exception", -1));
+					this->OnError(DC::DC_ERROR("OnRecv", "uncaught exception"));
 				}
 
 				return PostRecv(PSC, PIC);
@@ -603,7 +603,7 @@ namespace DC {
 					this->OnError(err);
 				}
 				catch (...) {
-					this->OnError(DC::DC_ERROR("OnSend", "uncaught exception", -1));
+					this->OnError(DC::DC_ERROR("OnSend", "uncaught exception"));
 				}
 				return true;
 			}
@@ -680,7 +680,7 @@ namespace DC {
 							ptr.reset(new PerSocketContext(PoolCleanLimit.load(std::memory_order_acquire)));
 						}
 						catch (std::bad_alloc&) {
-							OnError(DC::DC_ERROR("ListenerThread", "new operator error", -1));
+							OnError(DC::DC_ERROR("ListenerThread", "new operator error"));
 							closesocket(acceptSocket);
 							continue;
 						}
@@ -690,7 +690,7 @@ namespace DC {
 							continue;
 						}
 						catch (...) {
-							OnError(DC::DC_ERROR("ListenerThread", "unknown error", -1));
+							OnError(DC::DC_ERROR("ListenerThread", "unknown error"));
 							closesocket(acceptSocket);
 							continue;
 						}
@@ -704,7 +704,7 @@ namespace DC {
 					return true;
 				}
 				catch (DC::DC_ERROR& err) { OnError(err); return false; }
-				catch (...) { OnError(DC::DC_ERROR("ListenerThread", "unknown error", -1)); return false; }
+				catch (...) { OnError(DC::DC_ERROR("ListenerThread", "unknown error")); return false; }
 				return false;
 			}
 
@@ -757,7 +757,7 @@ namespace DC {
 					return;
 				}
 				catch (...) {
-					OnError(DC::DC_ERROR("CleanerThread", "uncaught exception", -1));
+					OnError(DC::DC_ERROR("CleanerThread", "uncaught exception"));
 					return;
 				}
 			}

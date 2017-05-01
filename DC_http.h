@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.2V19
-//20170421
+//Version 2.4.2V28
+//20170502
 
 namespace DC {
 
@@ -85,7 +85,7 @@ namespace DC {
 				if (input == 405) { return "Method Not Allowed"; }
 				if (input == 500) { return "Internal Error"; }
 				if (input == 503) { return "Service Unavailable"; }
-				throw DC::DC_ERROR("getSC", "unknown status code", 0);
+				throw DC::DC_ERROR("getSC", "unknown status code");
 			}
 
 			class base;
@@ -196,7 +196,7 @@ namespace DC {
 
 			inline httpSpace::header getHeader(const std::string& key)const {//如果有多个匹配的key，返回排在最前的
 				auto it = std::find_if(m_data.begin(), m_data.end(), std::bind(httpSpace::vec_header_find_func, std::placeholders::_1, key));
-				if (it == m_data.end()) throw DC::DC_ERROR("get", "key not found", 0);
+				if (it == m_data.end()) throw DC::DC_ERROR("get", "key not found");
 				return *it;
 			}
 
@@ -299,7 +299,7 @@ namespace DC {
 			template<>
 			inline httpSpace::title title_deserialization<http::request>(const std::string& input) {
 				auto loca = DC::STR::find(input, " ");
-				if (loca.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "method not found", 0);
+				if (loca.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "method not found");
 				auto GetVersionNumStr = [](const std::string& input) {
 					std::string rv;
 					for (const auto& p : input) {
@@ -309,7 +309,7 @@ namespace DC {
 				};
 				auto methodAndURI = DC::STR::getSub(input, -1, *loca.getplace_ref().rbegin());
 				auto frs = methodAndURI.find_first_of(' ');
-				if (frs == std::string::npos) throw DC::DC_ERROR("title_deserialization", "space not found", 0);
+				if (frs == std::string::npos) throw DC::DC_ERROR("title_deserialization", "space not found");
 
 				return httpSpace::title(GetVersionNumStr(DC::STR::getSub(input, *loca.getplace_ref().rbegin(), input.size())), DC::STR::getSub(methodAndURI, -1, frs), DC::STR::getSub(methodAndURI, frs, methodAndURI.size()));
 			}
@@ -317,7 +317,7 @@ namespace DC {
 			template<>
 			inline httpSpace::title title_deserialization<http::response>(const std::string& input) {
 				auto loca = DC::STR::find(input, " ");
-				if (loca.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "method not found", 0);
+				if (loca.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "method not found");
 				auto GetVersionNumStr = [](const std::string& input) {
 					std::string rv;
 					for (const auto& p : input) {
@@ -326,7 +326,7 @@ namespace DC {
 					return rv;
 				};
 				auto frs = DC::STR::find(input, " ");
-				if (frs.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "space not found", 0);
+				if (frs.getplace_ref().empty()) throw DC::DC_ERROR("title_deserialization", "space not found");
 				return httpSpace::title(GetVersionNumStr(DC::STR::getSub(input, -1, *loca.getplace_ref().begin())), (http::status_code)(DC::STR::toType<int32_t>(DC::STR::getSub(input, *frs.getplace_ref().begin(), *frs.getplace_ref().rbegin()))));
 			}
 

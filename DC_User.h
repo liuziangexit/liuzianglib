@@ -4,9 +4,10 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_MySQL.h"
-#include "DC_ERROR.h"
-//Version 2.4.2V4
-//20170407
+#include "DC_Exception.h"
+#pragma comment(lib,"ws2_32.lib")
+//Version 2.4.2V28
+//20170502
 
 namespace DC {
 

@@ -7,8 +7,8 @@
 #include "DC_STR.h"
 #include "liuzianglib.h"
 #include "DC_var.h"
-//Version 2.4.2V7
-//20170412
+//Version 2.4.2V28
+//20170502
 
 namespace DC {
 
@@ -46,7 +46,7 @@ namespace DC {
 				std::vector<std::size_t> AllStartSymbol = DC::STR::find(str, StartSymbol).getplace_ref(), AllEndSymbol = DC::STR::find(str, EndSymbol).getplace_ref();
 				std::vector<PosPair> returnvalue;
 
-				if (!SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired", 0);//判断开始符号和结束符号数量是否一样				
+				if (!SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired");//判断开始符号和结束符号数量是否一样				
 																																	//这个算法核心在于“距离AllStartSymbol中的最后一个元素最近且在其后的AllEndSymbol元素必然可以与之配对”。
 				for (auto i = AllStartSymbol.rbegin(); i != AllStartSymbol.rend(); i = AllStartSymbol.rbegin()) {
 					std::size_t minimal = INT_MAX;//int类型最大值
@@ -242,7 +242,7 @@ namespace DC {
 				refresh();
 				if (!is_bool() && !is_null() && !is_string() && !is_empty()) {
 					rawStr.clear();
-					throw DC::DC_ERROR("value", "bad value", 0);
+					throw DC::DC_ERROR("value", "bad value");
 				}
 			}
 
@@ -251,7 +251,7 @@ namespace DC {
 				refresh();
 				if (!is_bool() && !is_null() && !is_string() && !is_empty()) {
 					rawStr.clear();
-					throw DC::DC_ERROR("value", "bad value", 0);
+					throw DC::DC_ERROR("value", "bad value");
 				}
 			}
 
@@ -274,7 +274,7 @@ namespace DC {
 			inline bool as_bool()const {
 				if (rawStr == "true") return true;
 				if (rawStr == "false") return false;
-				throw DC::DC_ERROR("value::as_bool", "can not as bool", 0);
+				throw DC::DC_ERROR("value::as_bool", "can not as bool");
 			}
 
 			inline DC::var as_var()const {
@@ -288,13 +288,13 @@ namespace DC {
 
 			inline std::string as_string()const {
 				if (!is_string())
-					throw DC::DC_ERROR("value::as_string", "can not as string", 0);
+					throw DC::DC_ERROR("value::as_string", "can not as string");
 				return DC::STR::replace(rawStr, DC::STR::find(rawStr, "\\\""), "\"");
 			}
 
 			inline std::string to_string() {
 				if (!is_string())
-					throw DC::DC_ERROR("value::as_string", "can not as string", 0);
+					throw DC::DC_ERROR("value::as_string", "can not as string");
 				isStr = false;
 				auto temp = std::move(rawStr);
 				return DC::STR::replace(temp, DC::STR::find(temp, "\\\""), "\"");
@@ -323,7 +323,7 @@ namespace DC {
 				}
 
 				if (flag == true)
-					throw DC::DC_ERROR("value::RemoveOutsideSymbol", "can not find end symbol", 0);
+					throw DC::DC_ERROR("value::RemoveOutsideSymbol", "can not find end symbol");
 			}
 
 			virtual inline void refresh()noexcept {
@@ -420,7 +420,7 @@ namespace DC {
 					return this->as_double() == input.as_double();
 				}
 				catch (...) {
-					throw DC::DC_ERROR("number::operator==", "can not as number", 0);
+					throw DC::DC_ERROR("number::operator==", "can not as number");
 				}
 			}
 
@@ -429,7 +429,7 @@ namespace DC {
 					return this->as_double() > input.as_double();
 				}
 				catch (...) {
-					throw DC::DC_ERROR("number::operator>", "can not as number", 0);
+					throw DC::DC_ERROR("number::operator>", "can not as number");
 				}
 			}
 
@@ -438,7 +438,7 @@ namespace DC {
 					return this->as_double() < input.as_double();
 				}
 				catch (...) {
-					throw DC::DC_ERROR("number::operator<", "can not as number", 0);
+					throw DC::DC_ERROR("number::operator<", "can not as number");
 				}
 			}
 
@@ -447,7 +447,7 @@ namespace DC {
 					return this->as_double() >= input.as_double();
 				}
 				catch (...) {
-					throw DC::DC_ERROR("number::operator>=", "can not as number", 0);
+					throw DC::DC_ERROR("number::operator>=", "can not as number");
 				}
 			}
 
@@ -456,7 +456,7 @@ namespace DC {
 					return this->as_double() <= input.as_double();
 				}
 				catch (...) {
-					throw DC::DC_ERROR("number::operator<=", "can not as number", 0);
+					throw DC::DC_ERROR("number::operator<=", "can not as number");
 				}
 			}
 
@@ -495,7 +495,7 @@ namespace DC {
 					return DC::STR::toType<int32_t>(rawStr);
 				}
 				catch (...) {
-					throw DC::DC_ERROR("number::as_int32", "can not as int32", 0);
+					throw DC::DC_ERROR("number::as_int32", "can not as int32");
 				}
 			}
 
@@ -504,7 +504,7 @@ namespace DC {
 					return DC::STR::toType<double>(rawStr);
 				}
 				catch (...) {
-					throw DC::DC_ERROR("number::as_double", "can not as double", 0);
+					throw DC::DC_ERROR("number::as_double", "can not as double");
 				}
 			}
 
@@ -604,10 +604,10 @@ namespace DC {
 				}
 				//如果有多个key则抛异常
 				if (findResult.size() < 1) {
-					throw DC::DC_ERROR("object::at", "cant find key", 0);
+					throw DC::DC_ERROR("object::at", "cant find key");
 				}
 				if (findResult.size() > 1) {
-					throw DC::DC_ERROR("object::at", "too much key", 0);
+					throw DC::DC_ERROR("object::at", "too much key");
 				}
 				std::size_t startpos = 0, endpos = 0, temp;
 				//找key之后第一个冒号
@@ -615,7 +615,7 @@ namespace DC {
 					temp = findNeXTchar(':', *findResult.begin() + findResult_Full.getsize());
 				}
 				catch (...) {
-					throw DC::DC_ERROR("object::at", "can not find separator", 0);//找不到冒号
+					throw DC::DC_ERROR("object::at", "can not find separator");//找不到冒号
 				}
 				//找冒号之后第一个可视字符，这个字符就是value的开始
 				try {
@@ -695,7 +695,7 @@ namespace DC {
 
 				//判断合法
 				if (startpos > endpos)
-					throw DC::DC_ERROR("object::at", "substring length illegal", 0);//子串长度不合法
+					throw DC::DC_ERROR("object::at", "substring length illegal");//子串长度不合法
 																					//获取子串
 																					/*this内的函数与STR::getSub()参数逻辑不同，所以某些地方进行了+1或-1的工作。
 																					this内的函数从startpos执行到endpos，其中包括startpos和endpos所指向的位置本身；
@@ -727,7 +727,7 @@ namespace DC {
 				}
 
 				if (flag == true)
-					throw DC::DC_ERROR("object::RemoveOutsideSymbol", "can not find end symbol", 0);
+					throw DC::DC_ERROR("object::RemoveOutsideSymbol", "can not find end symbol");
 			}
 
 			virtual void refresh() {
@@ -772,7 +772,7 @@ namespace DC {
 				std::vector<jsonSpace::PosPair> returnvalue;
 
 				if (AllSymbol.size() % 2 != 0)
-					throw DC::DC_ERROR("invalid string", "string symbols \"\" can not be paired", 0);
+					throw DC::DC_ERROR("invalid string", "string symbols \"\" can not be paired");
 				while (!AllSymbol.empty()) {
 					returnvalue.emplace_back(*AllSymbol.begin(), *(AllSymbol.begin() + 1));
 					AllSymbol.erase(AllSymbol.begin());
@@ -880,7 +880,7 @@ namespace DC {
 			}
 
 			transparent operator[](const std::size_t& index)const {
-				if (index > ObjectSymbolPair.size() - 1) throw DC::DC_ERROR("array::operator[]", "index out of range", 0);//size_t无符号不会有小数，所以不考虑小于0
+				if (index > ObjectSymbolPair.size() - 1) throw DC::DC_ERROR("array::operator[]", "index out of range");//size_t无符号不会有小数，所以不考虑小于0
 				return DC::STR::getSub(rawStr, ObjectSymbolPair[index].first - 1, ObjectSymbolPair[index].second + 1);
 			}
 
@@ -940,7 +940,7 @@ namespace DC {
 				}
 
 				if (flag == true)
-					throw DC::DC_ERROR("object::RemoveOutsideSymbol", "can not find end symbol", 0);
+					throw DC::DC_ERROR("object::RemoveOutsideSymbol", "can not find end symbol");
 			}
 
 			void refresh() {

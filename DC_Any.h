@@ -5,9 +5,9 @@
 #include <string>
 #include <memory>
 #include <typeindex>
-#include "DC_ERROR.h"
-//Version 2.4.2V25
-//20170424
+#include "DC_Exception.h"
+//Version 2.4.2V28
+//20170502
 
 namespace DC {
 	

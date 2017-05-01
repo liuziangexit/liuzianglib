@@ -6,10 +6,10 @@
 #include <memory>
 #include <algorithm>
 #include <sstream>
-#include "DC_ERROR.h"
+#include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.2V27
-//20170501
+//Version 2.4.2V28
+//20170502
 
 namespace DC {
 
