@@ -4,9 +4,10 @@
 #include <vector>
 #include <limits>
 #include <type_traits>
+#include <functional>
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.2V29
+//Version 2.4.2V30
 //20170502
 
 namespace DC {
@@ -46,7 +47,7 @@ namespace DC {
 				std::vector<PosPair> returnvalue;
 
 				if (!SybolValid(AllStartSymbol, AllEndSymbol)) throw DC::DC_ERROR("invalid string", "symbols can not be paired");//判断开始符号和结束符号数量是否一样				
-																																	//这个算法核心在于“距离AllStartSymbol中的最后一个元素最近且在其后的AllEndSymbol元素必然可以与之配对”。
+																																 //这个算法核心在于“距离AllStartSymbol中的最后一个元素最近且在其后的AllEndSymbol元素必然可以与之配对”。
 				for (auto i = AllStartSymbol.rbegin(); i != AllStartSymbol.rend(); i = AllStartSymbol.rbegin()) {
 					std::size_t minimal = INT_MAX;//int类型最大值
 					auto iter = AllEndSymbol.end();
@@ -117,39 +118,23 @@ namespace DC {
 		class object;
 
 		class transparent final :public jsonSpace::base {
+			friend class object;
 		public:
-			transparent::transparent() = default;
-
-			transparent(const transparent&);
-
-			transparent(transparent&&)noexcept;
+			transparent::transparent() :withTable(false) {}
 
 			transparent(const std::string&);
 
 			transparent(std::string&&);
 
 		public:
-			transparent& operator=(const transparent& input) {
-				if (this == &input)
-					return *this;
-				setRawStr(input.rawStr);
-				return *this;
-			}
-
-			transparent& operator=(transparent&& input)noexcept {
-				if (this == &input)
-					return *this;
-				setRawStr(std::move(input.rawStr));
-				return *this;
-			}
-
-		public:
 			virtual inline void set(const std::string& input)override {
 				setRawStr(input);
+				withTable = false;
 			}
 
 			virtual inline void set(std::string&& input)override {
 				setRawStr(std::move(input));
+				withTable = false;
 			}
 
 			inline bool is_empty()const {
@@ -192,6 +177,7 @@ namespace DC {
 
 		private:
 			std::unique_ptr<jsonSpace::base> ptr;
+			bool withTable;
 		};
 
 		class value final :public jsonSpace::base {
@@ -522,23 +508,29 @@ namespace DC {
 		};
 
 		class object :public jsonSpace::base {
+			friend class transparent;
 		public:
-			object() = default;
+			object() :RemoveOutsideSymbolFlag(false) {}
 
-			object(const object& input) :ObjectSymbolPair(input.ObjectSymbolPair), ArraySymbolPair(input.ArraySymbolPair), StringSymbolPair(input.StringSymbolPair) {
+			object(const object& input) :ObjectSymbolPair(input.ObjectSymbolPair), ArraySymbolPair(input.ArraySymbolPair), StringSymbolPair(input.StringSymbolPair), RemoveOutsideSymbolFlag(input.RemoveOutsideSymbolFlag) {
 				setRawStr(input.rawStr);
 			}
 
-			object(object&& input)noexcept : ObjectSymbolPair(std::move(input.ObjectSymbolPair)), ArraySymbolPair(std::move(input.ArraySymbolPair)), StringSymbolPair(std::move(input.StringSymbolPair)) {
+			object(object&& input)noexcept : ObjectSymbolPair(std::move(input.ObjectSymbolPair)), ArraySymbolPair(std::move(input.ArraySymbolPair)), StringSymbolPair(std::move(input.StringSymbolPair)), RemoveOutsideSymbolFlag(input.RemoveOutsideSymbolFlag) {
 				setRawStr(std::move(input.rawStr));
 			}
 
-			object(const std::string& input) {
+			object(const std::string& input) :RemoveOutsideSymbolFlag(false) {
 				set(input);
 			}
 
-			object(std::string&& input) {
+			object(std::string&& input) :RemoveOutsideSymbolFlag(false) {
 				set(std::move(input));
+			}
+
+			object(const std::string& inputrawStr, const std::vector<jsonSpace::PosPair>& inputOS, const std::vector<jsonSpace::PosPair>& inputAS, const std::vector<jsonSpace::PosPair>& inputSS) :ObjectSymbolPair(inputOS), ArraySymbolPair(inputAS), StringSymbolPair(inputSS), RemoveOutsideSymbolFlag(false) {
+				//符号表重用的构造函数
+				rawStr = inputrawStr;
 			}
 
 			virtual ~object() = default;
@@ -695,16 +687,23 @@ namespace DC {
 				//判断合法
 				if (startpos > endpos)
 					throw DC::DC_ERROR("object::at", "substring length illegal");//子串长度不合法
-																					//获取子串
-																					/*this内的函数与STR::getSub()参数逻辑不同，所以某些地方进行了+1或-1的工作。
-																					this内的函数从startpos执行到endpos，其中包括startpos和endpos所指向的位置本身；
-																					而getSub则只会对startpos与endpos之间的进行操作（不包括pos指向的位置本身），当startpos==endpos时，getSub将会返回一个空串*/
+																				 //获取子串
+																				 /*this内的函数与STR::getSub()参数逻辑不同，所以某些地方进行了+1或-1的工作。
+																				 this内的函数从startpos执行到endpos，其中包括startpos和endpos所指向的位置本身；
+																				 而getSub则只会对startpos与endpos之间的进行操作（不包括pos指向的位置本身），当startpos==endpos时，getSub将会返回一个空串*/
 
+				auto check = std::bind(&object::has_table_to_transport, this, std::placeholders::_1, startpos - 1, endpos);
+				if (check(ObjectSymbolPair) || check(ArraySymbolPair) || check(StringSymbolPair)) {
+					return get_child(jsonSpace::PosPair(startpos - 1, endpos));
+				}
 				return transparent(STR::getSub(rawStr, startpos - 1, endpos));
 			}
 
 		protected:
 			virtual void RemoveOutsideSymbol() {//删除最外面的符号对
+				if (RemoveOutsideSymbolFlag) return;
+				RemoveOutsideSymbolFlag = true;
+
 				bool flag = false;
 
 				for (auto i = rawStr.begin(); i != rawStr.end(); i++) {
@@ -822,20 +821,46 @@ namespace DC {
 				if (!ArraySymbolPair.empty()) ArraySymbolPair.clear();
 			}
 
+			inline bool has_table_to_transport(const std::vector<jsonSpace::PosPair>& table, const DC::pos_type& start, const DC::pos_type& end)const {
+				auto findfunc = [&start, &end](const jsonSpace::PosPair& res) {
+					if (res.first > start&&res.first < end) return true;
+					return false;
+				};
+				if (std::find_if(table.begin(), table.end(), findfunc) == table.end()) return false;
+				return true;
+			}
+
+			std::vector<jsonSpace::PosPair> get_transport_table(const std::vector<jsonSpace::PosPair>& table, const jsonSpace::PosPair& pos)const {
+				std::vector<jsonSpace::PosPair> rv;
+				for (const auto& p : table)
+					if (p.first > pos.first + 1 && p.first < pos.second - 1) rv.emplace_back(p.first - pos.first - 2, p.second - pos.first - 2);
+				return rv;
+			}
+
+			transparent get_child(const jsonSpace::PosPair& pos)const {
+				transparent rv;
+				rv.rawStr = DC::STR::getSub(rawStr, pos.first, pos.second);
+				rv.ptr.reset(new object(rv.rawStr, get_transport_table(ObjectSymbolPair, pos), get_transport_table(ArraySymbolPair, pos), get_transport_table(StringSymbolPair, pos)));
+				rv.withTable = true;
+				return rv;
+			}
+
 		protected:
 			std::vector<jsonSpace::PosPair> ObjectSymbolPair, ArraySymbolPair, StringSymbolPair;
+			bool RemoveOutsideSymbolFlag;
 		};
 
 		class array final :private object {
-			friend class json::transparent;//transparent 里面有个转换需要这样搞
+			friend class transparent;
 		public:
-			array() = default;
+			array() : object() {}
 
 			array(const array& input) {
 				ArraySymbolPair = input.ArraySymbolPair;
 				StringSymbolPair = input.StringSymbolPair;
 				ObjectSymbolPair = input.ObjectSymbolPair;
 				setRawStr(input.rawStr);
+				RemoveOutsideSymbolFlag = input.RemoveOutsideSymbolFlag;
 			}
 
 			array(array&& input)noexcept {
@@ -843,13 +868,14 @@ namespace DC {
 				StringSymbolPair = std::move(input.StringSymbolPair);
 				ObjectSymbolPair = std::move(input.ObjectSymbolPair);
 				setRawStr(std::move(input.rawStr));
+				RemoveOutsideSymbolFlag = input.RemoveOutsideSymbolFlag;
 			}
 
-			array(const std::string& input) {
+			array(const std::string& input) : object() {
 				set(input);
 			}
 
-			array(std::string&& input) {
+			array(std::string&& input) : object() {
 				set(std::move(input));
 			}
 
@@ -918,6 +944,9 @@ namespace DC {
 
 		private:
 			void RemoveOutsideSymbol() {//删除最外面的符号对
+				if (RemoveOutsideSymbolFlag) return;
+				RemoveOutsideSymbolFlag = true;
+
 				bool flag = false;
 
 				for (auto i = rawStr.begin(); i != rawStr.end(); i++) {
@@ -957,7 +986,6 @@ namespace DC {
 					}
 
 					std::reverse(ObjectSymbolPair.begin(), ObjectSymbolPair.end());
-
 				}
 				catch (const DC::DC_ERROR& ex) {
 					clear_except_rawStr();
@@ -966,27 +994,27 @@ namespace DC {
 			}
 		};
 
-		transparent::transparent(const transparent& input) {
-			setRawStr(input.rawStr);
-		}
-
-		transparent::transparent(transparent&& input)noexcept {
-			setRawStr(std::move(input.rawStr));
-		}
-
-		transparent::transparent(const std::string& input) {
+		transparent::transparent(const std::string& input) :withTable(false) {
 			set(input);
 		}
 
-		transparent::transparent(std::string&& input) {
+		transparent::transparent(std::string&& input) : withTable(false) {
 			set(std::move(input));
 		}
 
 		inline object& transparent::as_object() {
+			if (withTable) {
+				reinterpret_cast<object*>(ptr.get())->RemoveOutsideSymbol();
+				return *reinterpret_cast<object*>(ptr.get());
+			}
 			return as_something<json::object>();
 		}
 
 		inline object&& transparent::to_object() {
+			if (withTable) {
+				reinterpret_cast<object*>(ptr.get())->RemoveOutsideSymbol();
+				return std::move(*reinterpret_cast<object*>(ptr.get()));
+			}
 			return to_something<json::object>();
 		}
 
@@ -1007,10 +1035,34 @@ namespace DC {
 		}
 
 		inline array& transparent::as_array() {
+			if (withTable) {
+				reinterpret_cast<array*>(ptr.get())->RemoveOutsideSymbol();
+				for (auto i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
+					if (reinterpret_cast<array*>(ptr.get())->isInsideStr(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideObj(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideArr(i->first)) {
+						i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.erase(i);
+						continue;
+					}
+					i++;
+				}
+				std::reverse(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end());
+				return *reinterpret_cast<array*>(ptr.get());
+			}
 			return as_something<json::array>();
 		}
 
 		inline array&& transparent::to_array() {
+			if (withTable) {
+				reinterpret_cast<array*>(ptr.get())->RemoveOutsideSymbol();
+				for (auto i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
+					if (reinterpret_cast<array*>(ptr.get())->isInsideStr(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideObj(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideArr(i->first)) {
+						i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.erase(i);
+						continue;
+					}
+					i++;
+				}
+				std::reverse(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end());
+				return std::move(*reinterpret_cast<array*>(ptr.get()));
+			}
 			return to_something<json::array>();
 		}
 
