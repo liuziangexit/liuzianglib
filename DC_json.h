@@ -5,9 +5,8 @@
 #include <limits>
 #include <type_traits>
 #include "DC_STR.h"
-#include "liuzianglib.h"
 #include "DC_var.h"
-//Version 2.4.2V28
+//Version 2.4.2V29
 //20170502
 
 namespace DC {
