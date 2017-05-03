@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.2V22
-//20170422
+//Version 2.4.2V32
+//20170504
 
 #define GET_FIRST_PARAMETERS 0//  ”√”⁄GetCommandLineParameters
 
@@ -201,7 +201,7 @@ namespace DC {
 
 	template <typename T, typename U>
 	inline void vector_fast_erase_no_return(T& vec, const U& it) {
-		if (vec.empty()) return vec.end();
+		if (vec.empty()) return;
 		if (it != vec.rbegin().base()) std::swap(*it, *vec.rbegin());
 		vec.pop_back();
 	}

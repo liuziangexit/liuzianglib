@@ -5,10 +5,11 @@
 #include <limits>
 #include <type_traits>
 #include <functional>
+#include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.2V31
-//20170503
+//Version 2.4.2V32
+//20170504
 
 namespace DC {
 
@@ -57,8 +58,8 @@ namespace DC {
 					if (iter == AllEndSymbol.end())
 						throw DC::DC_ERROR("undefined behavior", 0);//理论上应该不会抛出。。。
 					returnvalue.emplace_back(*i, *iter);
-					AllStartSymbol.erase(--i.base());
-					AllEndSymbol.erase(iter);
+					DC::vector_fast_erase_no_return(AllStartSymbol, --i.base());
+					DC::vector_fast_erase_no_return(AllEndSymbol, iter);
 				}
 				return returnvalue;
 			}
@@ -589,7 +590,7 @@ namespace DC {
 				//判断key在本层（既不在字符串内，又不在其它对象内）
 				for (auto i = findResult.begin(); i != findResult.end();) {
 					if (isInsideStr(*i) || isInsideObj(*i) || isInsideArr(*i)) {
-						i = findResult.erase(i);
+						i = DC::vector_fast_erase(findResult, i);
 						continue;
 					}
 					i++;
@@ -774,6 +775,7 @@ namespace DC {
 					throw DC::DC_ERROR("invalid string", "string symbols \"\" can not be paired");
 				while (!AllSymbol.empty()) {
 					returnvalue.emplace_back(*AllSymbol.begin(), *(AllSymbol.begin() + 1));
+					//这里对顺序有要求，所以不能用fast_erase
 					AllSymbol.erase(AllSymbol.begin());
 					AllSymbol.erase(AllSymbol.begin());
 				}
@@ -810,8 +812,8 @@ namespace DC {
 					if (iter == AllEndSymbol.end())
 						throw DC::DC_ERROR("undefined behavior", 0);//理论上应该不会抛出，除非放进来的字符串不符合语法
 					returnvalue.emplace_back(*i, *iter);
-					AllStartSymbol.erase(--i.base());
-					AllEndSymbol.erase(iter);
+					DC::vector_fast_erase_no_return(AllStartSymbol, --i.base());
+					DC::vector_fast_erase_no_return(AllEndSymbol, iter);
 				}
 				return returnvalue;
 			}
@@ -982,7 +984,8 @@ namespace DC {
 
 					for (auto i = ObjectSymbolPair.begin(); i != ObjectSymbolPair.end();) {
 						if (isInsideStr(i->first) || isInsideObj(i->first) || isInsideArr(i->first)) {
-							i = ObjectSymbolPair.erase(i);
+							i = DC::vector_fast_erase(ObjectSymbolPair, i);
+							//i = ObjectSymbolPair.erase(i);
 							continue;
 						}
 						i++;
@@ -1042,12 +1045,14 @@ namespace DC {
 				reinterpret_cast<array*>(ptr.get())->RemoveOutsideSymbol();
 				for (auto i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
 					if (reinterpret_cast<array*>(ptr.get())->isInsideStr(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideObj(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideArr(i->first)) {
-						i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.erase(i);
+						i = DC::vector_fast_erase(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair, i);
 						continue;
 					}
 					i++;
 				}
-				std::reverse(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end());
+				std::sort(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end(), [](const jsonSpace::PosPair& first, const jsonSpace::PosPair& second) {
+					return first.first < second.first;
+				});
 				return *reinterpret_cast<array*>(ptr.get());
 			}
 			return as_something<json::array>();
@@ -1058,12 +1063,14 @@ namespace DC {
 				reinterpret_cast<array*>(ptr.get())->RemoveOutsideSymbol();
 				for (auto i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
 					if (reinterpret_cast<array*>(ptr.get())->isInsideStr(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideObj(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideArr(i->first)) {
-						i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.erase(i);
+						i = DC::vector_fast_erase(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair, i);
 						continue;
 					}
 					i++;
 				}
-				std::reverse(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end());
+				std::sort(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end(), [](const jsonSpace::PosPair& first, const jsonSpace::PosPair& second) {
+					return first.first < second.first;
+				});
 				return std::move(*reinterpret_cast<array*>(ptr.get()));
 			}
 			return to_something<json::array>();
