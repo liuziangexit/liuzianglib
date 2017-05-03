@@ -7,8 +7,8 @@
 #include <functional>
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.2V30
-//20170502
+//Version 2.4.2V31
+//20170503
 
 namespace DC {
 
@@ -528,12 +528,13 @@ namespace DC {
 				set(std::move(input));
 			}
 
+			virtual ~object() = default;
+
+		protected:
 			object(const std::string& inputrawStr, const std::vector<jsonSpace::PosPair>& inputOS, const std::vector<jsonSpace::PosPair>& inputAS, const std::vector<jsonSpace::PosPair>& inputSS) :ObjectSymbolPair(inputOS), ArraySymbolPair(inputAS), StringSymbolPair(inputSS), RemoveOutsideSymbolFlag(false) {
 				//符号表重用的构造函数
 				rawStr = inputrawStr;
 			}
-
-			virtual ~object() = default;
 
 		public:
 			object& operator=(const object& input) {
@@ -941,6 +942,8 @@ namespace DC {
 			inline size_type size()const {
 				return ObjectSymbolPair.size();
 			}
+
+			transparent at(const std::string& key)const = delete;
 
 		private:
 			void RemoveOutsideSymbol() {//删除最外面的符号对
