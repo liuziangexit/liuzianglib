@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.2V28
-//20170502
+//Version 2.4.2V33
+//20170514
 
 namespace DC {
 
@@ -487,6 +487,18 @@ namespace DC {
 
 		inline std::string get_ContentLength(const httpSpace::base& input) {
 			return get(input, httpSpace::Key_ContentLength);
+		}
+
+		inline std::string get_URL(const std::string& uri) {
+			auto pos = uri.find_first_of('?');
+			if (pos == std::string::npos || uri.empty()) return uri;
+			return DC::STR::getSub(uri, -1, pos);
+		}
+
+		inline std::string get_Parameter(const std::string& uri) {
+			auto pos = uri.find_first_of('?');
+			if (pos == std::string::npos || uri.empty()) throw DC::Exception("DC::http::get_Parameter", "? not found");
+			return DC::STR::getSub(uri, pos, uri.size());
 		}
 
 	}
