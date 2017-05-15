@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.2V32
-//20170504
+//Version 2.4.2V34
+//20170515
 
 #define GET_FIRST_PARAMETERS 0//  ”√”⁄GetCommandLineParameters
 
@@ -180,7 +180,10 @@ namespace DC {
 		virtual inline char GetSeparator()const noexcept = 0;
 
 	protected:
-		virtual inline bool isSeparator(const char& ch)const noexcept = 0;
+		virtual inline bool isSeparator(const char& ch)const noexcept {
+			if (ch == GetSeparator()) return true;
+			return false;
+		}
 
 	protected:
 		bool OK;
