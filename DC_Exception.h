@@ -3,12 +3,12 @@
 #define liuzianglib_ERROR
 #include <string>
 #include <time.h>
-//Version 2.4.2V28
-//20170502
+//Version 2.4.2V36
+//20170517
 
 namespace DC {
 
-	class Exception final {
+	class Exception {
 	public:
 		Exception() = default;
 
@@ -26,6 +26,8 @@ namespace DC {
 		Exception(const Exception&) = default;
 
 		Exception(Exception&&) = default;
+
+		virtual ~Exception() = default;
 
 	public:
 		Exception& operator=(const Exception& input) {
