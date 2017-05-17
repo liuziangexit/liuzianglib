@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.2V34
-//20170515
+//Version 2.4.2V35
+//20170517
 
 #define GET_FIRST_PARAMETERS 0//  ”√”⁄GetCommandLineParameters
 
@@ -207,6 +207,12 @@ namespace DC {
 		if (vec.empty()) return;
 		if (it != vec.rbegin().base()) std::swap(*it, *vec.rbegin());
 		vec.pop_back();
+	}
+
+	template <typename T>
+	inline bool isNull(T ptr)noexcept {
+		if (ptr == nullptr || ptr == NULL) return true;
+		return false;
 	}
 
 }
