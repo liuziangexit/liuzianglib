@@ -6,8 +6,8 @@
 #include <memory>
 #include <typeindex>
 #include "DC_Exception.h"
-//Version 2.4.2V28
-//20170502
+//Version 2.4.2V37
+//20170518
 
 namespace DC {
 	
@@ -68,7 +68,7 @@ namespace DC {
 		template<typename U>
 		inline U& get()const {
 			if (m_tpIndex != typeid(U))
-				throw DC::DC_ERROR("Any::get()", std::string("can not cast ") + m_tpIndex.name() + " to " + typeid(U).name(), 0);
+				throw DC::DC_ERROR("Any::get()", std::string("can not cast ") + m_tpIndex.name() + " to " + typeid(U).name());
 			return dynamic_cast<Derived<U>*> (m_ptr.get())->m_value;
 		}
 
