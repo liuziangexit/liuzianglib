@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.2V35
-//20170517
+//Version 2.4.2V39
+//20170519
 
 namespace DC {
 
@@ -21,26 +21,26 @@ namespace DC {
 			class headers;
 
 			using body = std::string;
-			using method = const std::string;
-			using status_code = const unsigned short;
+			using method = std::string;
+			using status_code = unsigned short;
 
 			namespace methods {
 
-				static http::method GET = "GET";
-				static http::method POST = "POST";
-				static http::method HEAD = "HEAD";
+				static const http::method GET = "GET";
+				static const http::method POST = "POST";
+				static const http::method HEAD = "HEAD";
 
 			}
 
 			namespace status_codes {
 
-				static http::status_code OK = 200;
-				static http::status_code BadRequest = 400;
-				static http::status_code Forbidden = 403;
-				static http::status_code NotFound = 404;
-				static http::status_code MethodNotAllowed = 405;
-				static http::status_code InternalError = 500;
-				static http::status_code ServiceUnavailable = 503;
+				static const http::status_code OK = 200;
+				static const http::status_code BadRequest = 400;
+				static const http::status_code Forbidden = 403;
+				static const http::status_code NotFound = 404;
+				static const http::status_code MethodNotAllowed = 405;
+				static const http::status_code InternalError = 500;
+				static const http::status_code ServiceUnavailable = 503;
 
 			}
 
@@ -501,6 +501,10 @@ namespace DC {
 				auto pos = uri.find_first_of('?');
 				if (pos == std::string::npos || uri.empty()) throw DC::Exception("DC::http::get_Parameter", "? not found");
 				return DC::STR::getSub(uri, pos, uri.size());
+			}
+
+			inline void add_ContentLength(httpSpace::base& input) {
+				input.Headers().add(addHeader("Content-Length", DC::STR::toString(input.Body().size())));
 			}
 
 		}
