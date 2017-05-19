@@ -8,9 +8,10 @@
 #include "DC_WinSock.h"
 #include "DC_ThreadPool.h"
 #include "DC_timer.h"
+#include "DC_ReadWriteMutex.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V35
-//20170517
+//Version 2.4.2V38
+//20170519
 
 namespace DC {
 
@@ -143,7 +144,7 @@ namespace DC {
 						inline T* make(U&& ...args)noexcept {
 							if (this == nullptr) return nullptr;
 							Cleanif();
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::WriteLocker LwriteLock(mutex);
 							try {
 								m.emplace_back(new T(std::forward<U>(args)...));
 							}
@@ -157,7 +158,7 @@ namespace DC {
 						inline T* put(U&& ...args)noexcept {//only unique_ptr
 							if (this == nullptr) return nullptr;
 							Cleanif();
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::WriteLocker LwriteLock(mutex);
 							try {
 								m.emplace_back(std::forward<U>(args)...);
 							}
@@ -169,7 +170,7 @@ namespace DC {
 
 						T* release(const T *input) {
 							if (this == nullptr) return nullptr;
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::ReadLocker locker(mutex);
 							for (auto i = m.begin(); i != m.end(); i++) {
 								if (*input == *(i->get())) {
 									removeTime++;
@@ -181,7 +182,7 @@ namespace DC {
 
 						bool drop(const T *input) {
 							if (this == nullptr) return false;
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::ReadLocker locker(mutex);
 							auto fres = std::find_if(m.begin(), m.end(), std::bind(&Pool::compare, this, std::placeholders::_1, input));
 
 							if (fres == m.end())
@@ -194,14 +195,14 @@ namespace DC {
 
 						void clean() {
 							if (this == nullptr) return;
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::WriteLocker LwriteLock(mutex);
 							realClean();
 							removeTime.store(0, std::memory_order_release);
 						}
 
 						inline void clear() {
 							if (this == nullptr) return;
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::WriteLocker LwriteLock(mutex);
 							m.clear();
 							removeTime.store(0, std::memory_order_release);
 						}
@@ -227,7 +228,7 @@ namespace DC {
 
 					private:
 						std::vector<std::unique_ptr<T, deleter>> m;
-						std::mutex writeLock;
+						DC::ReadWriteMutex mutex;
 						std::atomic_int32_t removeTime, cleanLimit;
 					};
 
@@ -248,7 +249,7 @@ namespace DC {
 						inline T* make(U&& ...args)noexcept {
 							if (this == nullptr) return nullptr;
 							Cleanif();
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::WriteLocker LwriteLock(mutex);
 							try {
 								m.emplace_back(new T(std::forward<U>(args)...));
 							}
@@ -262,7 +263,7 @@ namespace DC {
 						inline T* put(U&& ...args)noexcept {//only unique_ptr
 							if (this == nullptr) return nullptr;
 							Cleanif();
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::WriteLocker LwriteLock(mutex);
 							try {
 								m.emplace_back(std::forward<U>(args)...);
 							}
@@ -274,7 +275,7 @@ namespace DC {
 
 						T* release(const T *input) {
 							if (this == nullptr) return nullptr;
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::ReadLocker locker(mutex);
 							for (auto i = m.begin(); i != m.end(); i++) {
 								if (*input == *(i->get())) {
 									removeTime++;
@@ -286,7 +287,7 @@ namespace DC {
 
 						bool drop(const T *input) {
 							if (this == nullptr) return false;
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::ReadLocker locker(mutex);
 							auto fres = std::find_if(m.begin(), m.end(), std::bind(&Pool::compare, this, std::placeholders::_1, input));
 
 							if (fres == m.end())
@@ -299,14 +300,14 @@ namespace DC {
 
 						void clean() {
 							if (this == nullptr) return;
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::WriteLocker LwriteLock(mutex);
 							realClean();
 							removeTime.store(0, std::memory_order_release);
 						}
 
 						inline void clear() {
 							if (this == nullptr) return;
-							std::unique_lock<std::mutex> LwriteLock(writeLock);
+							DC::WriteLocker LwriteLock(mutex);
 							m.clear();
 							removeTime.store(0, std::memory_order_release);
 						}
@@ -343,7 +344,7 @@ namespace DC {
 
 					private:
 						std::vector<std::unique_ptr<T>> m;
-						std::mutex writeLock;
+						DC::ReadWriteMutex mutex;
 						std::atomic_int32_t removeTime, cleanLimit;
 					};
 
@@ -741,7 +742,8 @@ namespace DC {
 									timer.reset();
 									timer.start();
 								}
-								std::unique_lock<std::mutex> lockPSC(PSC_Pool.writeLock);
+								//std::unique_lock<std::mutex> lockPSC(PSC_Pool.writeLock);
+								DC::WriteLocker lockPSC(PSC_Pool.mutex);
 								timer.reset();
 								timer.start();
 								for (auto& p : PSC_Pool.m) {
