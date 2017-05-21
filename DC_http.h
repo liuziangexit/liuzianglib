@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.2V39
-//20170519
+//Version 2.4.2V40
+//20170521
 
 namespace DC {
 
@@ -447,7 +447,7 @@ namespace DC {
 					if (emptylineLoca.getplace_ref().empty())
 						headersraw = DC::STR::getSub(input, titleend, input.size());
 					else
-						headersraw = DC::STR::getSub(input, titleend, *emptylineLoca.getplace_ref().begin());
+						headersraw = DC::STR::getSub(input, titleend + 1, *emptylineLoca.getplace_ref().begin());
 				}
 				catch (...) {}
 
