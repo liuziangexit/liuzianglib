@@ -18,7 +18,7 @@
 </p>
 <h3>使用 liuzianglib 开发的软件</h3>
 <p>
-<a href="https://liuziangexit.com/BFT">战绩追踪</a>
+<a href="https://liuziangexit.com/BFT">战绩追踪</a><br>
 <a href="https://github.com/liuziangexit/liuziangWebServer">liuziangWebServer</a>
 </p>
 <h3>其它</h3>
