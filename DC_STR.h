@@ -8,8 +8,8 @@
 #include <sstream>
 #include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.2V28
-//20170502
+//Version 2.4.2V41
+//20170602
 
 namespace DC {
 
@@ -125,15 +125,17 @@ namespace DC {
 				std::string curLocale;
 			};
 
-			template <typename numtype> std::string::size_type Howmuchdig(numtype num) {//返回num的位数，比如num=1000时，返回4
+			template <typename numtype>
+			std::size_t Howmuchdig(numtype num) {//返回num的位数，比如num=1000时，返回4
 				int32_t i = 0;
 				while (num > 1) { num /= 10; i++; }
 				if (num == 1) return i + 1; else return i;
 			}
 
-			int getsomezero(const int& howmuch) {
+			inline std::size_t getsomezero(const int& howmuch) {
+				if (howmuch == 0) return 1;
 				if (howmuch < 0) return 0;
-				int returnvalue(1);
+				std::size_t returnvalue(1);
 				for (int i = 0; i < howmuch; returnvalue *= 10, i++);
 				return returnvalue;
 			}
@@ -296,7 +298,7 @@ namespace DC {
 			return std::wstring(toWide.get());
 		}
 
-		template <class T>
+		template <typename T>
 		std::string toString(const T& value) {
 			std::stringstream sstr;
 			sstr << value;
@@ -316,17 +318,17 @@ namespace DC {
 		}
 
 		template <>
-		std::string toString<int>(const int& num) {
+		std::string toString<int>(const int& num)noexcept {
 			if (num == 0) return "0";
 			if (STRSpace::isNegative(num)) {
 				std::string rv("-");
 				auto abs = STRSpace::getAbs(num);
-				for (std::size_t i = STRSpace::Howmuchdig(abs); i > 0; i--)
+				for (std::size_t i = Howmuchdig(abs); i > 0; i--)
 					rv.push_back(STRSpace::getCharFromNum(STRSpace::getbitvalue(abs, i)));
 				return rv;
 			}
 			std::string rv;
-			for (std::size_t i = STRSpace::Howmuchdig(num); i > 0; i--)
+			for (std::size_t i = Howmuchdig(num); i > 0; i--)
 				rv.push_back(STRSpace::getCharFromNum(STRSpace::getbitvalue(num, i)));
 			return rv;
 		}
