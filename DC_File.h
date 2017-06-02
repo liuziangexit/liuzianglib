@@ -3,11 +3,12 @@
 #define liuzianglib_File
 #include <string>
 #include "DC_Exception.h"
-//Version 2.4.2V28
-//20170502
+//Version 2.4.2V43
+//20170602
 
 #define ERROR_CANTOPENFILE DC::DC_ERROR(filename, "CAN NOT OPEN FILE")
 #define ERROR_CANTGETSIZE DC::DC_ERROR(filename, "CAN NOT GET FILE SIZE")
+#define ERROR_CANTREADFILE DC::DC_ERROR(filename, "CAN NOT READ FILE")
 
 namespace DC {
 
@@ -102,23 +103,70 @@ namespace DC {
 		std::size_t getSize(const std::string& filename) {//获取文件长度
 			file_ptr ptr;
 			if (!exists<text>(filename, ptr)) throw ERROR_CANTOPENFILE;
-			fseek(ptr.get(), 0L, SEEK_END);
+			if (fseek(ptr.get(), 0L, SEEK_END) != 0) throw ERROR_CANTGETSIZE;
 			const auto& rv = ftell(ptr.get());
 			if (rv < 0) throw ERROR_CANTGETSIZE;
 			return rv;//有符号无符号不匹配可以忽略，这里已经处理过那种错误了
 		}
 
+		std::size_t getSize(const std::string& filename, file_ptr& inputptr) {//获取文件长度
+			if (!exists<text>(filename, inputptr)) throw ERROR_CANTOPENFILE;
+			if (fseek(inputptr.get(), 0L, SEEK_END) != 0) throw ERROR_CANTGETSIZE;
+			const auto& rv = ftell(inputptr.get());
+			if (rv < 0) throw ERROR_CANTGETSIZE;
+			return rv;//有符号无符号不匹配可以忽略，这里已经处理过那种错误了
+		}
+
+		namespace FileSpace {
+
+			std::size_t getSizeB(const std::string& filename, file_ptr& inputptr) {//获取文件长度
+				if (!exists<binary>(filename, inputptr)) throw ERROR_CANTOPENFILE;
+				if (fseek(inputptr.get(), 0L, SEEK_END) != 0) throw ERROR_CANTGETSIZE;
+				const auto& rv = ftell(inputptr.get());
+				if (rv < 0) throw ERROR_CANTGETSIZE;
+				return rv;//有符号无符号不匹配可以忽略，这里已经处理过那种错误了
+			}
+
+		}
+
 		template<typename FLAG = text>
 		std::string read(const std::string& filename) {
-			static_assert(std::is_same<std::decay_t<FLAG>, text>::value || std::is_same<std::decay_t<FLAG>, binary>::value, "flag illegal");
+			static_assert(std::is_same<std::decay_t<FLAG>, text>::value, "flag illegal");
+
 			file_ptr ptr;
-			if (!exists<FLAG>(filename, ptr)) throw ERROR_CANTOPENFILE;
+			auto size = getSize(filename, ptr);
+
+			if (fseek(ptr.get(), 0L, SEEK_SET) != 0) throw ERROR_CANTREADFILE;
+
+			std::unique_ptr<char[]> buffer(new char[size + 1]);
+
+			if (fread(buffer.get(), sizeof(char), size, ptr.get()) > size)
+				throw ERROR_CANTREADFILE;
+
 			std::string returnvalue;
-			auto&& ch = fgetc(ptr.get());
-			while (ch != EOF) {
-				returnvalue.push_back(ch);
-				ch = fgetc(ptr.get());
-			}
+			returnvalue.reserve(size);
+			for (int i = 0; i < size; i++)
+				returnvalue.push_back(buffer[i]);
+			return returnvalue;
+		}
+
+		template<>
+		std::string read<binary>(const std::string& filename) {
+			file_ptr ptr;
+			auto size = FileSpace::getSizeB(filename, ptr);
+
+			if (fseek(ptr.get(), 0L, SEEK_SET) != 0) throw ERROR_CANTREADFILE;
+
+			std::unique_ptr<char[]> buffer(new char[size + 1]);
+
+			ptr.reset(fopen(filename.c_str(), "rb"));
+			if (fread(buffer.get(), sizeof(char), size, ptr.get()) > size)
+				throw ERROR_CANTREADFILE;
+
+			std::string returnvalue;
+			returnvalue.reserve(size);
+			for (int i = 0; i < size; i++)
+				returnvalue.push_back(buffer[i]);
 			return returnvalue;
 		}
 
