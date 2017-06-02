@@ -8,7 +8,7 @@
 #include <sstream>
 #include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.2V41
+//Version 2.4.2V42
 //20170602
 
 namespace DC {
@@ -124,13 +124,6 @@ namespace DC {
 			private:
 				std::string curLocale;
 			};
-
-			template <typename numtype>
-			std::size_t Howmuchdig(numtype num) {//返回num的位数，比如num=1000时，返回4
-				int32_t i = 0;
-				while (num > 1) { num /= 10; i++; }
-				if (num == 1) return i + 1; else return i;
-			}
 
 			inline std::size_t getsomezero(const int& howmuch) {
 				if (howmuch == 0) return 1;

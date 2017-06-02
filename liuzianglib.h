@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.2V35
-//20170517
+//Version 2.4.2V42
+//20170602
 
 #define GET_FIRST_PARAMETERS 0//适用于GetCommandLineParameters
 
@@ -23,7 +23,8 @@ namespace DC {
 		return dis(gen);
 	}
 
-	template <typename numtype> std::string::size_type Howmuchdig(numtype num) {//返回num的位数，比如num=1000时，返回4
+	template <typename numtype>
+	std::size_t Howmuchdig(numtype num) {//返回num的位数，比如num=1000时，返回4
 		int32_t i = 0;
 		while (num > 1) { num /= 10; i++; }
 		if (num == 1) return i + 1; else return i;
