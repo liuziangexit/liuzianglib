@@ -159,7 +159,6 @@ namespace DC {
 
 			std::unique_ptr<char[]> buffer(new char[size + 1]);
 
-			ptr.reset(fopen(filename.c_str(), "rb"));
 			if (fread(buffer.get(), sizeof(char), size, ptr.get()) > size)
 				throw ERROR_CANTREADFILE;
 
