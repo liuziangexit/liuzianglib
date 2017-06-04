@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.2V40
-//20170521
+//Version 2.4.2V44
+//20170604
 
 namespace DC {
 
@@ -357,7 +357,7 @@ namespace DC {
 
 				template<typename ...argsType>
 				request(argsType ...args) {
-					httpSpace::Derived_construct(reinterpret_cast<httpSpace::base&>(*this), std::forward<argsType>(args)...);
+					httpSpace::Derived_construct(static_cast<httpSpace::base&>(*this), std::forward<argsType>(args)...);
 				}
 
 			public:
@@ -382,7 +382,7 @@ namespace DC {
 
 				template<typename ...argsType>
 				response(argsType ...args) {
-					httpSpace::Derived_construct(reinterpret_cast<httpSpace::base&>(*this), std::forward<argsType>(args)...);
+					httpSpace::Derived_construct(static_cast<httpSpace::base&>(*this), std::forward<argsType>(args)...);
 				}
 
 			public:
@@ -398,7 +398,7 @@ namespace DC {
 				}
 
 				inline http::status_code StatusCode() {
-					return DC::STR::toType<int32_t>(m_title.StatusCode());
+					return DC::STR::toType<http::status_code>(m_title.StatusCode());
 				}
 			};
 
@@ -409,7 +409,7 @@ namespace DC {
 
 			request request_deserialization(const std::string& input) {
 				std::string titleraw, headersraw, bodyraw;
-				std::size_t titleend = 0, headersend = 0;
+				std::size_t titleend = 0;
 
 				for (std::size_t i = 0; i < input.size(); i++) {
 					if (input[i] == '\n') { titleend = i; break; }
@@ -435,7 +435,7 @@ namespace DC {
 
 			response response_deserialization(const std::string& input) {
 				std::string titleraw, headersraw, bodyraw;
-				std::size_t titleend = 0, headersend = 0;
+				std::size_t titleend = 0;
 
 				for (std::size_t i = 0; i < input.size(); i++) {
 					if (input[i] == '\r') { titleend = i; break; }

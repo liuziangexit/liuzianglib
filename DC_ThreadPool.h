@@ -6,8 +6,8 @@
 #include <mutex>
 #include <future>
 #include <queue>
-//Version 2.4.2V19
-//20170421
+//Version 2.4.2V44
+//20170604
 
 namespace DC {
 
@@ -22,14 +22,13 @@ namespace DC {
 				WorkerThreads.emplace_back(&ThreadPool::thread_func, this);
 		}
 
+		ThreadPool(const ThreadPool& input) = delete;
+
+		ThreadPool& operator=(const ThreadPool& input) = delete;
+
 		~ThreadPool() {
 			join();
 		}
-
-	private:
-		ThreadPool(const ThreadPool& input) {}
-
-		ThreadPool& operator=(const ThreadPool& input) {}
 
 	private:
 		enum class state

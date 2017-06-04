@@ -8,8 +8,8 @@
 #include <sstream>
 #include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.2V42
-//20170602
+//Version 2.4.2V44
+//20170604
 
 namespace DC {
 
@@ -184,14 +184,13 @@ namespace DC {
 					rv.push_back(str[i]);
 				return rv;
 			};
-			if (wheretoput<0 || wheretoput>str.size()) throw DC::DC_ERROR("index illegal", 0);
+			if (wheretoput > str.size()) throw DC::DC_ERROR("index illegal", 0);
 			return GetBefore() + input + GetAfter();
 		}
 
 		std::string insertCHS(const std::string& str, const std::string& input, const std::size_t& wheretoput) {//在 std::string str[wheretoput] 之后插入 std::string input
 																												//wheretoput非法时抛异常
 																												//兼容中文
-			if (wheretoput < 0) throw DC::DC_ERROR("index illegal", 0);
 			std::size_t realput = 0, count_ = 0;
 			std::string before, after;
 			for (std::size_t i = 0; i < str.size(); i++) {

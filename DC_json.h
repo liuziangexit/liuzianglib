@@ -8,8 +8,8 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.2V35
-//20170517
+//Version 2.4.2V44
+//20170604
 
 namespace DC {
 
@@ -129,6 +129,10 @@ namespace DC {
 
 				transparent(std::string&&);
 
+				transparent(const transparent&) = delete;
+
+				transparent(transparent&&) = default;
+
 			public:
 				virtual inline void set(const std::string& input)override {
 					setRawStr(input);
@@ -169,13 +173,13 @@ namespace DC {
 				template<typename T>
 				T& as_something() {
 					ptr.reset(new T(rawStr));
-					return *reinterpret_cast<T*>(ptr.get());
+					return *static_cast<T*>(ptr.get());
 				}
 
 				template<typename T>
 				T&& to_something() {
 					ptr.reset(new T(std::move(rawStr)));
-					return std::move(*reinterpret_cast<T*>(ptr.get()));
+					return std::move(*static_cast<T*>(ptr.get()));
 				}
 
 			private:
@@ -325,7 +329,7 @@ namespace DC {
 				std::size_t findNeXTcharReverse(std::size_t startpos) {//找到下一个字符，比如"name:  s"，从5开始找，找到s结束，忽略途中所有格式控制符
 																	   //找不到抛异常
 					if (rawStr.empty()) throw false;
-					while (startpos >= 0) {
+					while (true) {
 						if (rawStr[startpos] != ' '&&rawStr[startpos] != '\n'&&rawStr[startpos] != '\r'&&rawStr[startpos] != '\t')
 							return startpos;
 						if (startpos == 0) break;
@@ -337,7 +341,7 @@ namespace DC {
 				std::size_t findNeXTcharReverse(const char& findthis, std::size_t startpos) {//找到下一个字符，比如"name:  s"，从5开始找，找到s结束，忽略途中所有格式控制符
 																							 //找不到抛异常
 					if (rawStr.empty()) throw false;
-					while (startpos >= 0) {
+					while (true) {
 						if (rawStr[startpos] == findthis)
 							return startpos;
 						if (startpos == 0) break;
@@ -1012,16 +1016,16 @@ namespace DC {
 
 			inline object& transparent::as_object() {
 				if (withTable) {
-					reinterpret_cast<object*>(ptr.get())->RemoveOutsideSymbol();
-					return *reinterpret_cast<object*>(ptr.get());
+					static_cast<object*>(ptr.get())->RemoveOutsideSymbol();
+					return *static_cast<object*>(ptr.get());
 				}
 				return as_something<json::object>();
 			}
 
 			inline object&& transparent::to_object() {
 				if (withTable) {
-					reinterpret_cast<object*>(ptr.get())->RemoveOutsideSymbol();
-					return std::move(*reinterpret_cast<object*>(ptr.get()));
+					static_cast<object*>(ptr.get())->RemoveOutsideSymbol();
+					return std::move(*static_cast<object*>(ptr.get()));
 				}
 				return to_something<json::object>();
 			}
@@ -1044,36 +1048,36 @@ namespace DC {
 
 			inline array& transparent::as_array() {
 				if (withTable) {
-					reinterpret_cast<array*>(ptr.get())->RemoveOutsideSymbol();
-					for (auto i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
-						if (reinterpret_cast<array*>(ptr.get())->isInsideStr(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideObj(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideArr(i->first)) {
-							i = DC::vector_fast_erase(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair, i);
+					static_cast<array*>(ptr.get())->RemoveOutsideSymbol();
+					for (auto i = static_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != static_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
+						if (static_cast<array*>(ptr.get())->isInsideStr(i->first) || static_cast<array*>(ptr.get())->isInsideObj(i->first) || static_cast<array*>(ptr.get())->isInsideArr(i->first)) {
+							i = DC::vector_fast_erase(static_cast<array*>(ptr.get())->ObjectSymbolPair, i);
 							continue;
 						}
 						i++;
 					}
-					std::sort(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end(), [](const jsonSpace::PosPair& first, const jsonSpace::PosPair& second) {
+					std::sort(static_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), static_cast<array*>(ptr.get())->ObjectSymbolPair.end(), [](const jsonSpace::PosPair& first, const jsonSpace::PosPair& second) {
 						return first.first < second.first;
 					});
-					return *reinterpret_cast<array*>(ptr.get());
+					return *static_cast<array*>(ptr.get());
 				}
 				return as_something<json::array>();
 			}
 
 			inline array&& transparent::to_array() {
 				if (withTable) {
-					reinterpret_cast<array*>(ptr.get())->RemoveOutsideSymbol();
-					for (auto i = reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
-						if (reinterpret_cast<array*>(ptr.get())->isInsideStr(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideObj(i->first) || reinterpret_cast<array*>(ptr.get())->isInsideArr(i->first)) {
-							i = DC::vector_fast_erase(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair, i);
+					static_cast<array*>(ptr.get())->RemoveOutsideSymbol();
+					for (auto i = static_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != static_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
+						if (static_cast<array*>(ptr.get())->isInsideStr(i->first) || static_cast<array*>(ptr.get())->isInsideObj(i->first) || static_cast<array*>(ptr.get())->isInsideArr(i->first)) {
+							i = DC::vector_fast_erase(static_cast<array*>(ptr.get())->ObjectSymbolPair, i);
 							continue;
 						}
 						i++;
 					}
-					std::sort(reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), reinterpret_cast<array*>(ptr.get())->ObjectSymbolPair.end(), [](const jsonSpace::PosPair& first, const jsonSpace::PosPair& second) {
+					std::sort(static_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), static_cast<array*>(ptr.get())->ObjectSymbolPair.end(), [](const jsonSpace::PosPair& first, const jsonSpace::PosPair& second) {
 						return first.first < second.first;
 					});
-					return std::move(*reinterpret_cast<array*>(ptr.get()));
+					return std::move(*static_cast<array*>(ptr.get()));
 				}
 				return to_something<json::array>();
 			}

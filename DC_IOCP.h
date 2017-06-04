@@ -10,8 +10,8 @@
 #include "DC_timer.h"
 #include "DC_ReadWriteMutex.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V38
-//20170519
+//Version 2.4.2V44
+//20170604
 
 namespace DC {
 
@@ -27,9 +27,9 @@ namespace DC {
 
 					class unique_id {
 					public:
-						unique_id() :uniqueid(DC::randomer(0, 21476836476)) {}
+						unique_id() :uniqueid(DC::randomer(0, 2147483648)) {}
 
-						unique_id(const int32_t input) :uniqueid(input) {}
+						unique_id(const int32_t& input) :uniqueid(input) {}
 
 						unique_id(const unique_id&) = default;
 
@@ -357,6 +357,8 @@ namespace DC {
 						m_sock = INVALID_SOCKET;
 						timer.start();
 					}
+
+					PerSocketContext(const PerSocketContext&) = delete;
 
 					~PerSocketContext() {
 						CloseSock();

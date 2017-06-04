@@ -3,8 +3,8 @@
 #define liuzianglib_RWMutex
 #include <mutex>
 #include <condition_variable>
-//Version 2.4.2V38
-//20170519
+//Version 2.4.2V44
+//20170604
 //注意，locker系列不是线程安全
 
 namespace DC {
@@ -38,6 +38,10 @@ namespace DC {
 	class ReadWriteMutex final {
 	public:
 		ReadWriteMutex() :writer(false), readers(0) {}
+
+		ReadWriteMutex(const ReadWriteMutex&) = delete;
+
+		ReadWriteMutex& operator=(const ReadWriteMutex&) = delete;
 
 	public:
 		void read_lock() {
@@ -80,6 +84,10 @@ namespace DC {
 
 		ReadLocker(ReadWriteMutex& inputmut, const std::defer_lock_t&) :RWMutexSpace::LockerBase(inputmut) {}
 
+		ReadLocker(const ReadLocker&) = delete;
+
+		ReadLocker& operator=(const ReadLocker&) = delete;
+
 		virtual ~ReadLocker() {
 			if (islock) this->unlock();
 		}
@@ -103,6 +111,10 @@ namespace DC {
 		}
 
 		WriteLocker(ReadWriteMutex& inputmut, const std::defer_lock_t&) :RWMutexSpace::LockerBase(inputmut) {}
+
+		WriteLocker(const WriteLocker&) = delete;
+
+		WriteLocker& operator=(const WriteLocker&) = delete;
 
 		virtual ~WriteLocker() {
 			if (islock) this->unlock();
