@@ -5,8 +5,8 @@
 #include <string>
 #include "liuzianglib.h"
 #include "DC_STR.h"
-//Version 2.4.2V45
-//20170604
+//Version 2.4.2V46
+//20170605
 
 namespace DC {
 
@@ -27,6 +27,16 @@ namespace DC {
 
 				class NV_base {//number和value的基类
 				public:
+					NV_base() : type(jsonBuilderSpace::DataType::empty_t) {}
+
+					NV_base(const NV_base&) = default;
+
+					NV_base(NV_base&& input) {
+						this->rawStr = std::move(input.rawStr);
+						this->type = input.type;
+						input.type = jsonBuilderSpace::DataType::empty_t;
+					}
+
 					virtual ~NV_base() = default;
 
 				public:
@@ -39,7 +49,7 @@ namespace DC {
 						return this->type;
 					}
 
-					inline std::string getValue()const {
+					inline std::string toString()const {
 						switch (type) {
 						case jsonBuilderSpace::DataType::bool_t: {
 							if (rawStr == "1") return "true";
@@ -60,6 +70,9 @@ namespace DC {
 						case jsonBuilderSpace::DataType::string_t: {
 							return '"' + rawStr + '"';
 						}break;
+						default: {
+							throw DC::Exception("jsonBuilder::jsonBuilderSpace::NV_base", "bad type");
+						}
 						}
 					}
 
@@ -75,14 +88,19 @@ namespace DC {
 
 				class JSKeyValuePair final :public DC::KeyValuePair {
 				public:
+					JSKeyValuePair() :DC::KeyValuePair::KeyValuePair() {}
+
+					template <typename T, typename T2>
+					JSKeyValuePair(T&& inputname, T2&& inputvalue) {
+						static_assert(std::is_same<std::string, typename std::decay<T>::type>::value, "input type should be std::string");
+						static_assert(std::is_same<std::string, typename std::decay<T2>::type>::value, "input type should be std::string");
+						this->name = std::forward<T>(inputname);
+						this->value = std::forward<T2>(inputvalue);
+					}
+
 					JSKeyValuePair(const JSKeyValuePair&) = default;
 
-					JSKeyValuePair(JSKeyValuePair&& input) {
-						name = std::move(input.name);
-						value = std::move(input.value);
-						OK = input.OK;
-						input.OK = false;
-					}
+					JSKeyValuePair(JSKeyValuePair&& input) :DC::KeyValuePair::KeyValuePair(std::move(input)) {}
 
 				public:
 					template <typename T>
@@ -95,24 +113,33 @@ namespace DC {
 						this->value = std::forward<T>(input);
 					}
 
-					virtual inline char GetSeparator()const noexcept { return 0; }
+					virtual inline char GetSeparator()const noexcept override {
+						return 0;
+					}
 				};
 
 			}
 
 			class value final :public jsonBuilderSpace::NV_base {
 			public:
-				value() {
-					type = jsonBuilderSpace::DataType::empty_t;
+				value() :NV_base() {}
+
+				template <typename T, class = typename std::enable_if<!std::is_same<typename std::decay<T>::type, value>::value, T>::type, class = typename std::enable_if<!std::is_same<typename std::decay<T>::type, bool>::value, T>::type>
+				value(T&& inputstr) {
+					this->fromString(std::forward<T>(inputstr));
 				}
 
-				value(const value&) = default;
-
-				value(value&& input) {
-					this->rawStr = std::move(input.rawStr);
-					this->type = input.type;
-					input.type = jsonBuilderSpace::DataType::empty_t;
+				value(const char* const inputstr) {
+					this->fromString(std::string(inputstr));
 				}
+
+				value(const bool& inputbool) {
+					this->fromBool(inputbool);
+				}
+
+				value(const value& input) :NV_base(input) {}
+
+				value(value&& input) :NV_base(std::move(input)) {}
 
 			public:
 				template <typename T>
@@ -130,17 +157,19 @@ namespace DC {
 
 			class number final :public jsonBuilderSpace::NV_base {
 			public:
-				number() {
-					type = jsonBuilderSpace::DataType::empty_t;
+				number() :NV_base() {}
+				
+				number(const int32_t& input) {
+					this->fromInt32(input);
 				}
 
-				number(const number&) = default;
-
-				number(number&& input) {
-					this->rawStr = std::move(input.rawStr);
-					this->type = input.type;
-					input.type = jsonBuilderSpace::DataType::empty_t;
+				number(const double& input) {
+					this->fromDouble(input);
 				}
+
+				number(const number& input) :NV_base(input) {}
+
+				number(number&& input) :NV_base(std::move(input)) {}
 
 			public:
 				inline void fromInt32(const int32_t& input) {
@@ -153,6 +182,14 @@ namespace DC {
 					type = jsonBuilderSpace::DataType::double_t;
 				}
 			};
+			
+			template <typename T>
+			inline T getNull() {//获得一个内含null的value或number(类型通过模板参数指定)
+				static_assert(std::is_same<number, typename std::decay<T>::type>::value || std::is_same<value, typename std::decay<T>::type>::value, "input type should be jsonBuilder::value or jsonBuilder::number");
+				T rv;
+				rv.fromNull();
+				return rv;
+			}
 
 			class object final {
 			public:
@@ -165,17 +202,8 @@ namespace DC {
 			public:
 				std::string toString()const {}
 
-				template <typename ...ARGS>
-				inline void add(ARGS&& ...args) {
-					m_data.emplace_back(std::forward<ARGS>(args)...);
-				}
-
-				inline void add(const jsonBuilderSpace::JSKeyValuePair& input) {
-					m_data.push_back(input);
-				}
-
-				inline void add(jsonBuilderSpace::JSKeyValuePair&& input) {
-					m_data.push_back(std::move(input));
+				inline void add(const std::string& name, const jsonBuilderSpace::NV_base& v) {
+					m_data.emplace_back(name, v.toString());
 				}
 
 				inline void clear() {
