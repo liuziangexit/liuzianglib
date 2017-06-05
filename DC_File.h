@@ -2,9 +2,10 @@
 #ifndef liuzianglib_File
 #define liuzianglib_File
 #include <string>
+#include <memory>
 #include "DC_Exception.h"
-//Version 2.4.2V43
-//20170602
+//Version 2.4.2V47
+//20170605
 
 #define ERROR_CANTOPENFILE DC::DC_ERROR(filename, "CAN NOT OPEN FILE")
 #define ERROR_CANTGETSIZE DC::DC_ERROR(filename, "CAN NOT GET FILE SIZE")
@@ -136,16 +137,18 @@ namespace DC {
 			file_ptr ptr;
 			auto size = getSize(filename, ptr);
 
-			if (fseek(ptr.get(), 0L, SEEK_SET) != 0) throw ERROR_CANTREADFILE;
+			rewind(ptr.get());
 
 			std::unique_ptr<char[]> buffer(new char[size + 1]);
+			//memset(buffer.get(), 0, size + 1);
 
-			if (fread(buffer.get(), sizeof(char), size, ptr.get()) > size)
+			auto realSize = fread(buffer.get(), sizeof(char), size, ptr.get());
+			if (realSize > size)
 				throw ERROR_CANTREADFILE;
 
 			std::string returnvalue;
-			returnvalue.reserve(size);
-			for (int i = 0; i < size; i++)
+			returnvalue.reserve(realSize);
+			for (int i = 0; i < realSize; i++)
 				returnvalue.push_back(buffer[i]);
 			return returnvalue;
 		}
@@ -155,16 +158,18 @@ namespace DC {
 			file_ptr ptr;
 			auto size = FileSpace::getSizeB(filename, ptr);
 
-			if (fseek(ptr.get(), 0L, SEEK_SET) != 0) throw ERROR_CANTREADFILE;
+			rewind(ptr.get());
 
 			std::unique_ptr<char[]> buffer(new char[size + 1]);
+			//memset(buffer.get(), 0, size + 1);
 
-			if (fread(buffer.get(), sizeof(char), size, ptr.get()) > size)
+			auto realSize = fread(buffer.get(), sizeof(char), size, ptr.get());
+			if (realSize > size)
 				throw ERROR_CANTREADFILE;
 
 			std::string returnvalue;
-			returnvalue.reserve(size);
-			for (int i = 0; i < size; i++)
+			returnvalue.reserve(realSize);
+			for (int i = 0; i < realSize; i++)
 				returnvalue.push_back(buffer[i]);
 			return returnvalue;
 		}

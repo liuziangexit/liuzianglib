@@ -8,8 +8,8 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.2V44
-//20170604
+//Version 2.4.2V47
+//20170605
 
 namespace DC {
 
@@ -27,7 +27,7 @@ namespace DC {
 					DC::pos_type first, second;
 				};
 
-				typedef std::vector<PosPair> ObjTable;
+				using ObjTable = std::vector<PosPair>;
 
 				inline bool comparePosPairfirst(const PosPair& input0, const PosPair& input1) {//比较两个PosPair的开始位置
 																							   //sort时使用，较小的排在前面
@@ -72,7 +72,19 @@ namespace DC {
 
 				class base {
 				public:
+					base() = default;
+
+					base(const base&) = default;
+
+					base(base&&) = default;
+
 					virtual ~base() = default;
+
+				protected:
+					template <typename T, class = typename std::enable_if<!std::is_same<typename std::decay<T>::type, base>::value, T>::type>
+					base(T&& inputstr) :rawStr(std::forward<T>(inputstr)) {
+						static_assert(std::is_same<std::string, typename std::decay<T>::type>::value, "input type must be std::string");
+					}
 
 				public:
 					virtual void set(const std::string& input) = 0;
@@ -148,8 +160,6 @@ namespace DC {
 					return rawStr.empty();
 				}
 
-				object& as_object();
-
 				object&& to_object();
 
 				value& as_value();
@@ -159,8 +169,6 @@ namespace DC {
 				number& as_number();
 
 				number&& to_number();
-
-				array& as_array();
 
 				array&& to_array();
 
@@ -538,9 +546,11 @@ namespace DC {
 				virtual ~object() = default;
 
 			protected:
-				object(const std::string& inputrawStr, const std::vector<jsonSpace::PosPair>& inputOS, const std::vector<jsonSpace::PosPair>& inputAS, const std::vector<jsonSpace::PosPair>& inputSS) :ObjectSymbolPair(inputOS), ArraySymbolPair(inputAS), StringSymbolPair(inputSS), RemoveOutsideSymbolFlag(false) {
+				template <typename strT, typename T>
+				object(strT&& inputrawStr, T&& inputOS, T&& inputAS, T&& inputSS) : jsonSpace::base(std::forward<strT>(inputrawStr)), ObjectSymbolPair(std::forward<T>(inputOS)), ArraySymbolPair(std::forward<T>(inputAS)), StringSymbolPair(std::forward<T>(inputSS)), RemoveOutsideSymbolFlag(false) {
+					static_assert(std::is_same<std::vector<jsonSpace::PosPair>, typename std::decay<T>::type>::value, "input type must be std::vector<jsonSpace::PosPair>");
+					static_assert(std::is_same<std::string, typename std::decay<strT>::type>::value, "input type must be std::string");
 					//符号表重用的构造函数
-					rawStr = inputrawStr;
 				}
 
 			public:
@@ -565,7 +575,7 @@ namespace DC {
 				}
 
 			public:
-				virtual void set(const std::string& input)override {
+				inline virtual void set(const std::string& input)override {
 					setRawStr(input);
 					try {
 						RemoveOutsideSymbol();
@@ -577,7 +587,7 @@ namespace DC {
 					}
 				}
 
-				virtual void set(std::string&& input)override {
+				inline virtual void set(std::string&& input)override {
 					setRawStr(std::move(input));
 					try {
 						RemoveOutsideSymbol();
@@ -701,9 +711,8 @@ namespace DC {
 																					 而getSub则只会对startpos与endpos之间的进行操作（不包括pos指向的位置本身），当startpos==endpos时，getSub将会返回一个空串*/
 
 					auto check = std::bind(&object::has_table_to_transport, this, std::placeholders::_1, startpos - 1, endpos);
-					if (check(ObjectSymbolPair) || check(ArraySymbolPair) || check(StringSymbolPair)) {
+					if (check(ObjectSymbolPair) || check(ArraySymbolPair) || check(StringSymbolPair))
 						return get_child(jsonSpace::PosPair(startpos - 1, endpos));
-					}
 					return transparent(STR::getSub(rawStr, startpos - 1, endpos));
 				}
 
@@ -749,25 +758,30 @@ namespace DC {
 				}
 
 			protected:
-				bool isInsideStr(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
-					for (const auto& p : StringSymbolPair) {
+				inline bool isInsideStr(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
+					for (const auto& p : StringSymbolPair)
 						if (input > p.first && input < p.second) return true;
-					}
 					return false;
 				}
 
-				bool isInsideObj(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
-					for (const auto& p : ObjectSymbolPair) {
+				inline bool isInsideObj(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
+					for (const auto& p : ObjectSymbolPair)
 						if (input > p.first && input < p.second) return true;
-					}
 					return false;
 				}
 
-				bool isInsideArr(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
-					for (const auto& p : ArraySymbolPair) {
+				inline bool isInsideArr(const DC::pos_type& input)const {//input位置是否在js字符串（不是js用户字符串）内
+					for (const auto& p : ArraySymbolPair)
 						if (input > p.first && input < p.second) return true;
-					}
 					return false;
+				}
+
+				inline bool is_Obj_or_Arr_find_if_pred_func(const jsonSpace::PosPair& something_inside, const jsonSpace::PosPair& input)const {
+					return input.first == something_inside.first - 1 && input.second == something_inside.second + 1;
+				}
+
+				inline bool is_Obj_or_Arr(const jsonSpace::PosPair& input, const std::vector<jsonSpace::PosPair>& symbols)const {//判断input是否为symbols中某一个成员，判断函数为is_Obj_or_Arr_find_if_pred_func
+					return std::find_if(symbols.begin(), symbols.end(), std::bind(&object::is_Obj_or_Arr_find_if_pred_func, this, std::placeholders::_1, input)) != symbols.end();
 				}
 
 				std::vector<jsonSpace::PosPair> getStringSymbolPair(std::string str)const {//找出配对的""
@@ -846,21 +860,16 @@ namespace DC {
 					return rv;
 				}
 
-				transparent get_child(const jsonSpace::PosPair& pos)const {
-					transparent rv;
-					rv.rawStr = DC::STR::getSub(rawStr, pos.first, pos.second);
-					rv.ptr.reset(new object(rv.rawStr, get_transport_table(ObjectSymbolPair, pos), get_transport_table(ArraySymbolPair, pos), get_transport_table(StringSymbolPair, pos)));
-					rv.withTable = true;
-					return rv;
-				}
+				transparent get_child(const jsonSpace::PosPair& pos)const;
 
 			protected:
 				std::vector<jsonSpace::PosPair> ObjectSymbolPair, ArraySymbolPair, StringSymbolPair;
 				bool RemoveOutsideSymbolFlag;
 			};
 
-			class array final :private object {
+			class array final :public object{
 				friend class transparent;
+				friend class object;
 			public:
 				array() : object() {}
 
@@ -888,9 +897,15 @@ namespace DC {
 					set(std::move(input));
 				}
 
-				virtual ~array() = default;
+				using size_type = std::size_t;
 
-				typedef std::size_t size_type;
+			protected:
+				template <typename strT, typename T>
+				array(strT&& inputrawStr, T&& inputOS, T&& inputAS, T&& inputSS) : object(std::forward<strT>(inputrawStr), std::forward<T>(inputOS), std::forward<T>(inputAS), std::forward<T>(inputSS)) {
+					static_assert(std::is_same<std::vector<jsonSpace::PosPair>, typename std::decay<T>::type>::value, "input type must be std::vector<jsonSpace::PosPair>");
+					static_assert(std::is_same<std::string, typename std::decay<strT>::type>::value, "input type must be std::string");
+					//符号表重用的构造函数
+				}
 
 			public:
 				array& operator=(const array& input) {
@@ -913,13 +928,13 @@ namespace DC {
 					return *this;
 				}
 
-				transparent operator[](const std::size_t& index)const {
+				inline transparent operator[](const std::size_t& index)const {
 					if (index > ObjectSymbolPair.size() - 1) throw DC::DC_ERROR("array::operator[]", "index out of range");//size_t无符号不会有小数，所以不考虑小于0
 					return DC::STR::getSub(rawStr, ObjectSymbolPair[index].first - 1, ObjectSymbolPair[index].second + 1);
 				}
 
 			public:
-				void set(const std::string& input)override {
+				inline virtual void set(const std::string& input)override {
 					setRawStr(input);
 					try {
 						RemoveOutsideSymbol();
@@ -931,7 +946,7 @@ namespace DC {
 					}
 				}
 
-				void set(std::string&& input)override {
+				inline virtual void set(std::string&& input)override {
 					setRawStr(std::move(input));
 					try {
 						RemoveOutsideSymbol();
@@ -951,10 +966,13 @@ namespace DC {
 					return ObjectSymbolPair.size();
 				}
 
-				transparent at(const std::string& key)const = delete;
+				inline transparent at(const std::size_t& index)const {
+					if (index > ObjectSymbolPair.size() - 1) throw DC::DC_ERROR("array::operator[]", "index out of range");//size_t无符号不会有小数，所以不考虑小于0
+					return DC::STR::getSub(rawStr, ObjectSymbolPair[index].first - 1, ObjectSymbolPair[index].second + 1);
+				}
 
-			private:
-				void RemoveOutsideSymbol() {//删除最外面的符号对
+			protected:
+				virtual void RemoveOutsideSymbol()override {//删除最外面的符号对
 					if (RemoveOutsideSymbolFlag) return;
 					RemoveOutsideSymbolFlag = true;
 
@@ -982,7 +1000,7 @@ namespace DC {
 						throw DC::DC_ERROR("object::RemoveOutsideSymbol", "can not find end symbol");
 				}
 
-				void refresh() {
+				virtual void refresh()override {
 					try {
 						StringSymbolPair = this->getStringSymbolPair(rawStr);
 						ObjectSymbolPair = getSymbolPair("{", "}");
@@ -1014,18 +1032,15 @@ namespace DC {
 				set(std::move(input));
 			}
 
-			inline object& transparent::as_object() {
-				if (withTable) {
-					static_cast<object*>(ptr.get())->RemoveOutsideSymbol();
-					return *static_cast<object*>(ptr.get());
-				}
-				return as_something<json::object>();
-			}
-
 			inline object&& transparent::to_object() {
 				if (withTable) {
-					static_cast<object*>(ptr.get())->RemoveOutsideSymbol();
-					return std::move(*static_cast<object*>(ptr.get()));
+					//动态转换到子类指针，失败抛异常
+					auto ptr_with_type(dynamic_cast<object*>(ptr.get()));
+					if (!ptr_with_type) throw DC::Exception("json::transparent::to_object", "bad cast");
+
+					//做一些操作然后返回
+					ptr_with_type->RemoveOutsideSymbol();
+					return std::move(*ptr_with_type);
 				}
 				return to_something<json::object>();
 			}
@@ -1046,40 +1061,42 @@ namespace DC {
 				return to_something<json::number>();
 			}
 
-			inline array& transparent::as_array() {
-				if (withTable) {
-					static_cast<array*>(ptr.get())->RemoveOutsideSymbol();
-					for (auto i = static_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != static_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
-						if (static_cast<array*>(ptr.get())->isInsideStr(i->first) || static_cast<array*>(ptr.get())->isInsideObj(i->first) || static_cast<array*>(ptr.get())->isInsideArr(i->first)) {
-							i = DC::vector_fast_erase(static_cast<array*>(ptr.get())->ObjectSymbolPair, i);
-							continue;
-						}
-						i++;
-					}
-					std::sort(static_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), static_cast<array*>(ptr.get())->ObjectSymbolPair.end(), [](const jsonSpace::PosPair& first, const jsonSpace::PosPair& second) {
-						return first.first < second.first;
-					});
-					return *static_cast<array*>(ptr.get());
-				}
-				return as_something<json::array>();
-			}
-
 			inline array&& transparent::to_array() {
 				if (withTable) {
-					static_cast<array*>(ptr.get())->RemoveOutsideSymbol();
-					for (auto i = static_cast<array*>(ptr.get())->ObjectSymbolPair.begin(); i != static_cast<array*>(ptr.get())->ObjectSymbolPair.end();) {
-						if (static_cast<array*>(ptr.get())->isInsideStr(i->first) || static_cast<array*>(ptr.get())->isInsideObj(i->first) || static_cast<array*>(ptr.get())->isInsideArr(i->first)) {
-							i = DC::vector_fast_erase(static_cast<array*>(ptr.get())->ObjectSymbolPair, i);
+					//动态转换到子类指针，失败抛异常
+					auto ptr_with_type(dynamic_cast<array*>(ptr.get()));
+					if (!ptr_with_type) throw DC::Exception("json::transparent::to_array", "bad cast");
+
+					//做一些操作然后返回
+					ptr_with_type->RemoveOutsideSymbol();
+					for (auto i = ptr_with_type->ObjectSymbolPair.begin(); i != ptr_with_type->ObjectSymbolPair.end();) {
+						if (ptr_with_type->isInsideStr(i->first) || ptr_with_type->isInsideObj(i->first) || ptr_with_type->isInsideArr(i->first)) {
+							i = DC::vector_fast_erase(ptr_with_type->ObjectSymbolPair, i);
 							continue;
 						}
 						i++;
 					}
-					std::sort(static_cast<array*>(ptr.get())->ObjectSymbolPair.begin(), static_cast<array*>(ptr.get())->ObjectSymbolPair.end(), [](const jsonSpace::PosPair& first, const jsonSpace::PosPair& second) {
+					std::sort(ptr_with_type->ObjectSymbolPair.begin(), ptr_with_type->ObjectSymbolPair.end(), [](const jsonSpace::PosPair& first, const jsonSpace::PosPair& second) {
 						return first.first < second.first;
 					});
-					return std::move(*static_cast<array*>(ptr.get()));
+					return std::move(*ptr_with_type);
 				}
 				return to_something<json::array>();
+			}
+
+			inline transparent object::get_child(const jsonSpace::PosPair& pos)const {
+				transparent rv;
+				rv.rawStr = DC::STR::getSub(rawStr, pos.first, pos.second);
+				const auto& lookA = is_Obj_or_Arr(pos, this->ArraySymbolPair);
+				const auto& lookO = is_Obj_or_Arr(pos, this->ObjectSymbolPair);
+				if (lookA&&lookO) throw DC::Exception("json::object::get_child", "pos illegal");//A和O只能有一个为真，如果两个都为真，是不应该发生的，此处抛出异常。至于为什么两个都不为真时不抛异常，是因为如果get的东西是一个value或者number，那就会都不为真，而这个是正常现象。
+				if (lookO)
+					rv.ptr.reset(new object(rv.rawStr, get_transport_table(ObjectSymbolPair, pos), get_transport_table(ArraySymbolPair, pos), get_transport_table(StringSymbolPair, pos)));
+				if (lookA)
+					rv.ptr.reset(new array(rv.rawStr, get_transport_table(ObjectSymbolPair, pos), get_transport_table(ArraySymbolPair, pos), get_transport_table(StringSymbolPair, pos)));
+				//如果测试的时候ptr不能dynamic_cast到array，是因为array采用private继承，外面是看不到基类信息的，所以不能在外面转，而透明是友元，所以可以在透明里转
+				rv.withTable = true;
+				return rv;
 			}
 
 		}
