@@ -6,7 +6,8 @@
 #include <type_traits>
 #include "liuzianglib.h"
 #include "DC_STR.h"
-//Version 2.4.2V50
+#include "DC_Exception.h"
+//Version 2.4.2V51
 //20170606
 
 namespace DC {
@@ -120,8 +121,12 @@ namespace DC {
 					}
 
 					virtual inline char GetSeparator()const noexcept override {
-						return 0;
+						return ':';
 					}
+
+					virtual void Set(const std::string& input)override {}
+
+					inline bool isSetOK()const = delete;
 				};
 
 				template<typename T>
@@ -268,6 +273,15 @@ namespace DC {
 					if (fres == m_data.end()) return false;
 					m_data.erase(fres);
 					return true;
+				}
+
+				inline jsonBuilderSpace::JSKeyValuePair& get(const std::string& name) {
+					decltype(m_data.begin()) fres = std::find_if(m_data.begin(), m_data.end(), [&name](const jsonBuilderSpace::JSKeyValuePair& item) {
+						if (item.GetName() == name) return true;
+						return false;
+					});
+					if (fres == m_data.end()) throw DC::Exception("jsonBuilder::object::get", "cannot find name");
+					return *fres;
 				}
 
 				inline void clear() {
