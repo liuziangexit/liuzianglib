@@ -5,10 +5,11 @@
 #include <limits>
 #include <type_traits>
 #include <functional>
+#include <stack>
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.2V48
+//Version 2.4.2V49
 //20170606
 
 namespace DC {
@@ -784,21 +785,22 @@ namespace DC {
 					return std::find_if(symbols.begin(), symbols.end(), std::bind(&object::is_Obj_or_Arr_find_if_pred_func, this, std::placeholders::_1, std::cref(input))) != symbols.end();
 				}
 
-				std::vector<jsonSpace::PosPair> getStringSymbolPair(std::string str)const {//找出配对的""
+				std::vector<jsonSpace::PosPair> getStringSymbolPair(const std::string str)const {//找出配对的""
 																						   //不能嵌套哦
 																						   //有一次参数拷贝开销
-					str = DC::STR::replace(str, DC::STR::find(str, R"(\")"), "  ");//把\"换成两个空格，既保证了长度不变，又保证了去除用户字符串里面的引号
-					std::vector<std::size_t> AllSymbol = DC::STR::find(str, "\"").getplace_ref();
+					auto tstr = DC::STR::replace(str, DC::STR::find(str, R"(\")"), "  ");//把\"换成两个空格，既保证了长度不变，又保证了去除用户字符串里面的引号
+					std::vector<std::size_t> AllSymbol = DC::STR::find(tstr, "\"").moveplace();
 					std::vector<jsonSpace::PosPair> returnvalue;
 
 					if (AllSymbol.size() % 2 != 0)
 						throw DC::DC_ERROR("invalid string", "string symbols \"\" can not be paired");
-					while (!AllSymbol.empty()) {
-						returnvalue.emplace_back(*AllSymbol.begin(), *(AllSymbol.begin() + 1));
-						//这里对顺序有要求，所以不能用fast_erase
-						AllSymbol.erase(AllSymbol.begin());
-						AllSymbol.erase(AllSymbol.begin());
+
+					for (std::size_t p = 0; p < AllSymbol.size(); ++p) {
+						auto temp1 = AllSymbol[p];//确保hapens-before
+						++p;
+						returnvalue.emplace_back(temp1, AllSymbol[p]);
 					}
+
 					return returnvalue;
 				}
 

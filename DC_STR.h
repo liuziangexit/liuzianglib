@@ -8,20 +8,19 @@
 #include <sstream>
 #include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.2V44
-//20170604
+//Version 2.4.2V49
+//20170606
 
 namespace DC {
 
 	namespace STR {
-
+		
 		namespace STRSpace {
 
 			std::vector<std::size_t> KMPSearch(const char *pat, const char *txt) {
-				std::vector<std::size_t> returnvalue;
 				std::size_t M = strlen(pat), N = strlen(txt), j = 0, i = 0;
-				std::unique_ptr<std::size_t[]> lps(new(std::nothrow) std::size_t[M]);
-				if (lps.get() == nullptr) return returnvalue;
+				std::unique_ptr<std::size_t[]> lps(reinterpret_cast<std::size_t*>(malloc(sizeof(std::size_t)*M)));
+				if (!lps.get()) return std::vector<std::size_t>();
 				auto computeLPSArray = [&pat, &M, &lps] {
 					std::size_t len = 0, i = 1;  // 记录前一个[最长匹配的前缀和后缀]的长度
 					lps[0] = 0; // lps[0] 必须是 0
@@ -51,6 +50,7 @@ namespace DC {
 					}
 				};
 				computeLPSArray();
+				std::vector<std::size_t> returnvalue;
 				while (i < N) {
 					if (pat[j] == txt[i])
 					{
@@ -59,7 +59,7 @@ namespace DC {
 					}
 					if (j == M)
 					{
-						returnvalue.push_back(i - j);
+						returnvalue.emplace_back(i - j);
 						j = lps[j - 1];
 					}
 					else if (pat[j] != txt[i])
@@ -96,6 +96,10 @@ namespace DC {
 
 				inline const std::vector<std::size_t>& getplace_ref()const {
 					return whererp;
+				}
+
+				inline std::vector<std::size_t>&& moveplace() {
+					return std::move(whererp);
 				}
 
 				inline std::size_t getsize()const {
@@ -223,9 +227,9 @@ namespace DC {
 			return str;
 		}
 
-		inline STRSpace::ReplaceInfo find(const std::string& str, const std::string& findstr) {//使用 KMP 字符串匹配算法找到所有存在于 std::string str 中的 std::string find，并返回它们的位置
+		inline STRSpace::ReplaceInfo find(const std::string& str, const std::string& findstr) {//使用 KMP 字符串匹配算法找到所有存在于 std::string str 中的 std::string find，并返回它们的位置		
+			if (str.empty() || findstr.empty()) return STRSpace::ReplaceInfo();
 			STRSpace::ReplaceInfo rv;
-			if (str.empty() || findstr.empty()) return rv;
 			rv.setsize(findstr.size());
 			rv.setplace(STRSpace::KMPSearch(findstr.c_str(), str.c_str()));
 			return rv;
