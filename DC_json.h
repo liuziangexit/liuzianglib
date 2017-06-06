@@ -8,8 +8,8 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.2V47
-//20170605
+//Version 2.4.2V48
+//20170606
 
 namespace DC {
 
@@ -103,7 +103,7 @@ namespace DC {
 						rawStr = std::forward<T>(input);
 					}
 
-					std::size_t findNeXTchar(std::size_t startpos)const {//找到下一个字符，比如"name:  s"，从5开始找，找到s结束，忽略途中所有格式控制符
+					inline std::size_t findNeXTchar(std::size_t startpos)const {//找到下一个字符，比如"name:  s"，从5开始找，找到s结束，忽略途中所有格式控制符
 																		 //找不到抛异常
 						if (rawStr.empty()) throw false;
 						for (; startpos < rawStr.size(); startpos++)
@@ -112,7 +112,7 @@ namespace DC {
 						throw false;
 					}
 
-					std::size_t findNeXTchar(const char& findthis, std::size_t startpos)const {//找到下一个字符
+					inline std::size_t findNeXTchar(const char& findthis, std::size_t startpos)const {//找到下一个字符
 																							   //找不到抛异常
 						if (rawStr.empty()) throw false;
 						for (; startpos < rawStr.size(); startpos++)
@@ -301,7 +301,7 @@ namespace DC {
 				}
 
 			protected:
-				virtual void RemoveOutsideSymbol() {
+				inline virtual void RemoveOutsideSymbol() {
 					bool flag = false;
 
 					for (auto i = rawStr.begin(); i != rawStr.end(); i++) {
@@ -358,7 +358,7 @@ namespace DC {
 					throw false;
 				}
 
-				bool makeIsStr()noexcept {
+				inline bool makeIsStr()noexcept {
 					std::size_t firstChar = 0, lastChar = 0;
 
 					//判断合不合法
@@ -781,7 +781,7 @@ namespace DC {
 				}
 
 				inline bool is_Obj_or_Arr(const jsonSpace::PosPair& input, const std::vector<jsonSpace::PosPair>& symbols)const {//判断input是否为symbols中某一个成员，判断函数为is_Obj_or_Arr_find_if_pred_func
-					return std::find_if(symbols.begin(), symbols.end(), std::bind(&object::is_Obj_or_Arr_find_if_pred_func, this, std::placeholders::_1, input)) != symbols.end();
+					return std::find_if(symbols.begin(), symbols.end(), std::bind(&object::is_Obj_or_Arr_find_if_pred_func, this, std::placeholders::_1, std::cref(input))) != symbols.end();
 				}
 
 				std::vector<jsonSpace::PosPair> getStringSymbolPair(std::string str)const {//找出配对的""
