@@ -3,10 +3,11 @@
 #define liuzianglib_jsonBuilder
 #include <vector>
 #include <string>
+#include <type_traits>
 #include "liuzianglib.h"
 #include "DC_STR.h"
-//Version 2.4.2V46
-//20170605
+//Version 2.4.2V50
+//20170606
 
 namespace DC {
 
@@ -15,7 +16,7 @@ namespace DC {
 		namespace jsonBuilder {
 
 			namespace jsonBuilderSpace {
-			
+
 				enum DataType {
 					string_t,
 					int_t,
@@ -103,6 +104,11 @@ namespace DC {
 					JSKeyValuePair(JSKeyValuePair&& input) :DC::KeyValuePair::KeyValuePair(std::move(input)) {}
 
 				public:
+					JSKeyValuePair& operator=(const JSKeyValuePair&) = default;
+
+					JSKeyValuePair& operator=(JSKeyValuePair&&) = default;
+
+				public:
 					template <typename T>
 					inline void SetName(T&& input) {
 						this->name = std::forward<T>(input);
@@ -117,6 +123,32 @@ namespace DC {
 						return 0;
 					}
 				};
+
+				template<typename T>
+				struct has_member_function_toString {
+				private:
+					using true_t = char;
+					using false_t = char[2];
+
+					template<typename T2, std::string(T::*)(void)const>
+					struct func_matcher;
+
+					template<typename T2>
+					static true_t& test(func_matcher<T2, &T2::toString>*);
+
+					template<typename T2>
+					static false_t& test(...);
+
+				public:
+					enum
+					{
+						result = (sizeof(test<T>(NULL)) == sizeof(true_t))
+					};
+				};
+
+				inline std::string GetJsStr(const std::string& input) {
+					return "\"" + input + "\"";
+				}
 
 			}
 
@@ -158,7 +190,7 @@ namespace DC {
 			class number final :public jsonBuilderSpace::NV_base {
 			public:
 				number() :NV_base() {}
-				
+
 				number(const int32_t& input) {
 					this->fromInt32(input);
 				}
@@ -182,7 +214,7 @@ namespace DC {
 					type = jsonBuilderSpace::DataType::double_t;
 				}
 			};
-			
+
 			template <typename T>
 			inline T getNull() {//获得一个内含null的value或number(类型通过模板参数指定)
 				static_assert(std::is_same<number, typename std::decay<T>::type>::value || std::is_same<value, typename std::decay<T>::type>::value, "input type should be jsonBuilder::value or jsonBuilder::number");
@@ -191,7 +223,7 @@ namespace DC {
 				return rv;
 			}
 
-			class object final {
+			class object {
 			public:
 				object() = default;
 
@@ -199,19 +231,88 @@ namespace DC {
 
 				object(object&&) = default;
 
-			public:
-				std::string toString()const {}
+				virtual ~object() = default;
 
-				inline void add(const std::string& name, const jsonBuilderSpace::NV_base& v) {
+			public:
+				object& operator=(const object&) = default;
+
+				object& operator=(object&&) = default;
+
+			public:
+				virtual std::string toString()const {//带有不规范缩进
+					std::string returnthis("{\n");
+					for (const auto& p : m_data)
+						returnthis += ' ' + jsonBuilderSpace::GetJsStr(p.GetName()) + ":" + p.GetValue() + ",\n";
+					if (!m_data.empty() && returnthis.size() > 2) returnthis.erase((returnthis.rbegin() + 2).base());
+					returnthis += "}";
+					return returnthis;
+				}
+
+				template <typename T, class = typename std::enable_if_t< !std::is_base_of<jsonBuilderSpace::NV_base, std::decay_t<T>>::value, T>>
+				void add(const std::string& name, T&& v) {//obj或array。任何带有成员函数toString，并且不是从jsonBuilderSpace::NV_base派生的类型也可以。
+														  //add时不会检查内部是否有重复的name
+					static_assert(jsonBuilderSpace::has_member_function_toString<std::decay_t<T>>::result, "value type doesnt have member function \"std::string toString(void)const\"");
 					m_data.emplace_back(name, v.toString());
+				}
+
+				inline void add(const std::string& name, const jsonBuilderSpace::NV_base& v) {//number或value
+																							  //add时不会检查内部是否有重复的name
+					m_data.emplace_back(name, v.toString());
+				}
+
+				inline bool erase(const std::string& name) {//input key/name
+					decltype(m_data.begin()) fres = std::find_if(m_data.begin(), m_data.end(), [&name](const jsonBuilderSpace::JSKeyValuePair& item) {
+						if (item.GetName() == name) return true;
+						return false;
+					});
+					if (fres == m_data.end()) return false;
+					m_data.erase(fres);
+					return true;
 				}
 
 				inline void clear() {
 					m_data.clear();
 				}
 
-			private:
+			protected:
 				std::vector<jsonBuilderSpace::JSKeyValuePair> m_data;
+			};
+
+			class array final :public object{
+			public:
+				array() = default;
+
+				array(const array& input) : object(input) {}
+
+				array(array&& input) : object(std::move(input)) {}
+
+			public:
+				array& operator=(const array&) = default;
+
+				array& operator=(array&&) = default;
+
+			public:
+				virtual std::string toString()const override {//带有不规范缩进
+					std::string returnthis("[\n");
+					for (const auto& p : m_data)
+						returnthis += ' ' + p.GetValue() + ",\n";
+					if (!m_data.empty() && returnthis.size() > 2) returnthis.erase((returnthis.rbegin() + 2).base());
+					returnthis += "]";
+					return returnthis;
+				}
+
+				inline void add(const std::string& name, const object& v) {//object和array
+																		   //由于参数不同，基类两个add自动被隐藏
+																		   //add时不会检查内部是否有重复的name
+					                                                       //此重载版本指定的name被用于replace。如果你用另一个add重载，那么就不能对放进去的值进行replace(因为那个重载没有name
+					m_data.emplace_back(name, v.toString());
+				}
+
+				inline void add(const object& v) {//object和array
+																		   //由于参数不同，基类两个add自动被隐藏
+																		   //add时不会检查内部是否有重复的name
+					m_data.emplace_back(std::string(""), v.toString());
+				}
 			};
 
 		}
