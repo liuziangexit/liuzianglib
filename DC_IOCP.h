@@ -10,8 +10,8 @@
 #include "DC_timer.h"
 #include "DC_ReadWriteMutex.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V44
-//20170604
+//Version 2.4.21
+//20170607
 
 namespace DC {
 
@@ -27,7 +27,7 @@ namespace DC {
 
 					class unique_id {
 					public:
-						unique_id() :uniqueid(DC::randomer(0, 2147483648)) {}
+						unique_id() :uniqueid(DC::randomer(0, 2147483647)) {}
 
 						unique_id(const int32_t& input) :uniqueid(input) {}
 
