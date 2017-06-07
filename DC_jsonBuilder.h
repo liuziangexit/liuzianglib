@@ -7,8 +7,8 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_Exception.h"
-//Version 2.4.2V51
-//20170606
+//Version 2.4.21V2
+//20170607
 
 namespace DC {
 
@@ -254,7 +254,7 @@ namespace DC {
 				}
 
 				template <typename T, class = typename std::enable_if_t< !std::is_base_of<jsonBuilderSpace::NV_base, std::decay_t<T>>::value, T>>
-				void add(const std::string& name, T&& v) {//obj或array。任何带有成员函数toString，并且不是从jsonBuilderSpace::NV_base派生的类型也可以。
+				void add(const std::string& name, const T& v) {//obj或array。任何带有成员函数toString，并且不是从jsonBuilderSpace::NV_base派生的类型也可以。
 														  //add时不会检查内部是否有重复的name
 					static_assert(jsonBuilderSpace::has_member_function_toString<std::decay_t<T>>::result, "value type doesnt have member function \"std::string toString(void)const\"");
 					m_data.emplace_back(name, v.toString());
