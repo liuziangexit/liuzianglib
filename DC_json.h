@@ -9,8 +9,8 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.2V49
-//20170606
+//Version 2.4.21V3
+//20170608
 
 namespace DC {
 
@@ -105,7 +105,7 @@ namespace DC {
 					}
 
 					inline std::size_t findNeXTchar(std::size_t startpos)const {//找到下一个字符，比如"name:  s"，从5开始找，找到s结束，忽略途中所有格式控制符
-																		 //找不到抛异常
+																				//找不到抛异常
 						if (rawStr.empty()) throw false;
 						for (; startpos < rawStr.size(); startpos++)
 							if (rawStr[startpos] != ' '&&rawStr[startpos] != '\n'&&rawStr[startpos] != '\r'&&rawStr[startpos] != '\t')
@@ -114,7 +114,7 @@ namespace DC {
 					}
 
 					inline std::size_t findNeXTchar(const char& findthis, std::size_t startpos)const {//找到下一个字符
-																							   //找不到抛异常
+																									  //找不到抛异常
 						if (rawStr.empty()) throw false;
 						for (; startpos < rawStr.size(); startpos++)
 							if (rawStr[startpos] == findthis)
@@ -604,9 +604,38 @@ namespace DC {
 					//搜索key
 					auto findResult_Full = DC::STR::find(rawStr, jsonSpace::GetJsStr(key));
 					auto findResult = findResult_Full.getplace_ref();
-					//判断key在本层（既不在字符串内，又不在其它对象内）
+					auto findNeXTcharReverse = std::bind([](const DC::pos_type& from, const std::string& str) {
+						if (from <= 0 || str.size() == 0 || from + 1 > str.size()) throw false;//没找到
+						for (auto i = from - 1; i >= 0; i--) {
+							if (str[i] != ' '&&str[i] != '\n'&&str[i] != '\r'&&str[i] != '\t')
+								return i;
+						}
+						throw false;
+					},
+						std::placeholders::_1,
+						std::cref(rawStr));
+
+					//判断key在本层（既不在字符串内，又不在其它对象内，同时也不能是一个value）
 					for (auto i = findResult.begin(); i != findResult.end();) {
-						if (isInsideStr(*i) || isInsideObj(*i) || isInsideArr(*i)) {
+
+						auto isValue = std::bind([&findNeXTcharReverse](const DC::pos_type& input, const std::string& str) {//是否为一个value(在冒号之后的
+							std::result_of_t<decltype(findNeXTcharReverse)(const DC::pos_type&)> result;//这个类型是findNeXTcharReverse的返回值类型							
+							try {
+								if (input - 1 < 0 || input - 1 + 1 > str.size()) return false;//下标非法了
+								if (str[input - 1] == ':') return true;
+								result = findNeXTcharReverse(input - 1);
+								if (result<0 || result + 1>str.size()) return false;//下标非法了
+								if (str[result] == ':') return true;
+							}
+							catch (bool&) {
+								return false;//没找到前一个字符，也说明不是value
+							}
+							return false;
+						},
+							std::placeholders::_1,
+							std::cref(rawStr));
+
+						if (isInsideStr(*i) || isInsideObj(*i) || isInsideArr(*i) || isValue(*i)) {
 							i = DC::vector_fast_erase(findResult, i);
 							continue;
 						}
@@ -786,8 +815,8 @@ namespace DC {
 				}
 
 				std::vector<jsonSpace::PosPair> getStringSymbolPair(const std::string str)const {//找出配对的""
-																						   //不能嵌套哦
-																						   //有一次参数拷贝开销
+																								 //不能嵌套哦
+																								 //有一次参数拷贝开销
 					auto tstr = DC::STR::replace(str, DC::STR::find(str, R"(\")"), "  ");//把\"换成两个空格，既保证了长度不变，又保证了去除用户字符串里面的引号
 					std::vector<std::size_t> AllSymbol = DC::STR::find(tstr, "\"").moveplace();
 					std::vector<jsonSpace::PosPair> returnvalue;
