@@ -9,7 +9,7 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.21V3
+//Version 2.4.21V4
 //20170608
 
 namespace DC {
@@ -604,36 +604,31 @@ namespace DC {
 					//搜索key
 					auto findResult_Full = DC::STR::find(rawStr, jsonSpace::GetJsStr(key));
 					auto findResult = findResult_Full.getplace_ref();
-					auto findNeXTcharReverse = std::bind([](const DC::pos_type& from, const std::string& str) {
-						if (from <= 0 || str.size() == 0 || from + 1 > str.size()) throw false;//没找到
+					auto findNeXTcharReverse = [this](const DC::pos_type& from) {
+						if (from <= 0 || this->rawStr.size() == 0 || from + 1 > this->rawStr.size()) throw false;//没找到
 						for (auto i = from - 1; i >= 0; i--) {
-							if (str[i] != ' '&&str[i] != '\n'&&str[i] != '\r'&&str[i] != '\t')
+							if (this->rawStr[i] != ' '&&this->rawStr[i] != '\n'&&this->rawStr[i] != '\r'&&this->rawStr[i] != '\t')
 								return i;
 						}
 						throw false;
-					},
-						std::placeholders::_1,
-						std::cref(rawStr));
+					};
 
 					//判断key在本层（既不在字符串内，又不在其它对象内，同时也不能是一个value）
 					for (auto i = findResult.begin(); i != findResult.end();) {
-
-						auto isValue = std::bind([&findNeXTcharReverse](const DC::pos_type& input, const std::string& str) {//是否为一个value(在冒号之后的
+						auto isValue = [&findNeXTcharReverse, this](const DC::pos_type& input) {//是否为一个value(在冒号之后的
 							std::result_of_t<decltype(findNeXTcharReverse)(const DC::pos_type&)> result;//这个类型是findNeXTcharReverse的返回值类型							
 							try {
-								if (input - 1 < 0 || input - 1 + 1 > str.size()) return false;//下标非法了
-								if (str[input - 1] == ':') return true;
+								if (input - 1 < 0 || input - 1 + 1 > this->rawStr.size()) return false;//下标非法了
+								if (this->rawStr[input - 1] == ':') return true;
 								result = findNeXTcharReverse(input - 1);
-								if (result<0 || result + 1>str.size()) return false;//下标非法了
-								if (str[result] == ':') return true;
+								if (result<0 || result + 1>this->rawStr.size()) return false;//下标非法了
+								if (this->rawStr[result] == ':') return true;
 							}
 							catch (bool&) {
 								return false;//没找到前一个字符，也说明不是value
 							}
 							return false;
-						},
-							std::placeholders::_1,
-							std::cref(rawStr));
+						};
 
 						if (isInsideStr(*i) || isInsideObj(*i) || isInsideArr(*i) || isValue(*i)) {
 							i = DC::vector_fast_erase(findResult, i);
