@@ -5,8 +5,8 @@
 #include <string>
 #include <memory>
 #pragma comment(lib, "ws2_32.lib")
-//Version 2.4.2V18
-//20170420
+//Version 2.4.21V5
+//20170622
 //注意:DC_WinSock.h必须先于DC_MySQL.h包含
 
 namespace DC {
@@ -129,6 +129,16 @@ namespace DC {
 
 		inline bool SetSendTimeOut(SOCKET s, std::size_t limit) {
 			if (setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (char *)&limit, sizeof(int)) == SOCKET_ERROR) return false;
+			return true;
+		}
+
+		bool GetAddressByHost(const std::string& Host, std::vector<std::string>& AddressOutPut) {
+			auto result = gethostbyname(Host.c_str());
+			if (result == NULL) return false;
+
+			for (int i = 0; result->h_addr_list[i] != NULL; i++)
+				AddressOutPut.emplace_back(inet_ntoa(*(reinterpret_cast<in_addr *>(result->h_addr_list[i]))));
+
 			return true;
 		}
 
