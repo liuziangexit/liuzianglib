@@ -8,8 +8,8 @@
 #include "liuzianglib.h"
 #include "DC_WinSock.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V36
-//20170517
+//Version 2.4.21V6
+//20170623
 
 namespace DC {
 
@@ -86,7 +86,7 @@ namespace DC {
 				private:
 					bool ListenerThread()noexcept {
 						try {
-							WinSock::SocketInit_TCP(m_listen);
+							WinSock::SocketInitTCP(m_listen);
 							if (m_listen == SOCKET_ERROR) return false;
 
 							if (!WinSock::Bind(m_listen, bindAddr)) { closesocket(m_listen); return false; }

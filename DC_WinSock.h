@@ -5,8 +5,8 @@
 #include <string>
 #include <memory>
 #pragma comment(lib, "ws2_32.lib")
-//Version 2.4.21V5
-//20170622
+//Version 2.4.21V6
+//20170623
 //注意:DC_WinSock.h必须先于DC_MySQL.h包含
 
 namespace DC {
@@ -49,7 +49,7 @@ namespace DC {
 			s = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 		}
 
-		inline void SocketInit_TCP(SOCKET& s) {
+		inline void SocketInitTCP(SOCKET& s) {
 			SocketInit(s, AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		}
 

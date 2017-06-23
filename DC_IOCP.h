@@ -10,8 +10,8 @@
 #include "DC_timer.h"
 #include "DC_ReadWriteMutex.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21
-//20170607
+//Version 2.4.21V6
+//20170623
 
 namespace DC {
 
@@ -669,7 +669,7 @@ namespace DC {
 
 					bool ListenerThread()noexcept {
 						try {
-							WinSock::SocketInit_TCP(m_listen);
+							WinSock::SocketInitTCP(m_listen);
 							if (m_listen == SOCKET_ERROR) return false;
 
 							if (!WinSock::Bind(m_listen, bindAddr)) { closesocket(m_listen); return false; }

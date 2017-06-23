@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.2V44
-//20170604
+//Version 2.4.21V6
+//20170623
 
 namespace DC {
 
@@ -227,8 +227,10 @@ namespace DC {
 					for (const auto& p : m_data) {
 						returnvalue += p.GetName() += p.GetSeparator() + p.GetValue() + httpSpace::nextline;
 					}
-					returnvalue.erase(--returnvalue.rbegin().base());
-					returnvalue.erase(--returnvalue.rbegin().base());
+					if (!m_data.empty()) {
+						returnvalue.erase(--returnvalue.rbegin().base());
+						returnvalue.erase(--returnvalue.rbegin().base());
+					}
 					return returnvalue;
 				}
 
