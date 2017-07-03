@@ -10,8 +10,8 @@
 #include "DC_timer.h"
 #include "DC_ReadWriteMutex.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V6
-//20170623
+//Version 2.4.21V8
+//20170703
 
 namespace DC {
 
@@ -540,7 +540,7 @@ namespace DC {
 					virtual void OnError(const DC::DC_ERROR&) {}
 
 					inline bool Send(PerSocketContext *client, const std::string& sendthis)noexcept {
-						return PostSend(client, client->make(sendthis.size() + 1), sendthis);
+						return PostSend(client, client->make(sendthis.size()), sendthis);
 					}
 
 				private:

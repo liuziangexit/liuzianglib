@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.21V6
-//20170623
+//Version 2.4.21V8
+//20170703
 
 namespace DC {
 
@@ -87,7 +87,7 @@ namespace DC {
 					if (input == 405) { return "Method Not Allowed"; }
 					if (input == 500) { return "Internal Error"; }
 					if (input == 503) { return "Service Unavailable"; }
-					throw DC::DC_ERROR("getSC", "unknown status code");
+					return "Unknown Status Code";
 				}
 
 				class base;
@@ -445,6 +445,7 @@ namespace DC {
 				}
 
 				auto emptylineLoca = DC::STR::find(input, httpSpace::emptyline);
+				auto threeCrlf = DC::STR::find(input, "\r\n\r\n\r\n");
 				try {
 					if (emptylineLoca.getplace_ref().empty())
 						headersraw = DC::STR::getSub(input, titleend, input.size());
@@ -454,7 +455,15 @@ namespace DC {
 				catch (...) {}
 
 				try {
-					if (!emptylineLoca.getplace_ref().empty()) bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline) - 1, input.size());
+					if (emptylineLoca.getplace_ref().empty()) throw false;
+
+					if (!threeCrlf.getplace_ref().empty()) {
+						if (*threeCrlf.getplace_ref().begin() == *emptylineLoca.getplace_ref().begin()) {
+							bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() - 1 + sizeof("\r\n\r\n\r\n") - 1, input.size());
+							throw true;
+						}
+					}
+					bodyraw = DC::STR::getSub(input, *emptylineLoca.getplace_ref().begin() + sizeof(httpSpace::emptyline) - 1, input.size());
 				}
 				catch (...) {}
 
