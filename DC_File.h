@@ -4,8 +4,8 @@
 #include <string>
 #include <memory>
 #include "DC_Exception.h"
-//Version 2.4.2V47
-//20170605
+//Version 2.4.21V7
+//20170703
 
 #define ERROR_CANTOPENFILE DC::DC_ERROR(filename, "CAN NOT OPEN FILE")
 #define ERROR_CANTGETSIZE DC::DC_ERROR(filename, "CAN NOT GET FILE SIZE")
@@ -146,11 +146,7 @@ namespace DC {
 			if (realSize > size)
 				throw ERROR_CANTREADFILE;
 
-			std::string returnvalue;
-			returnvalue.reserve(realSize);
-			for (int i = 0; i < realSize; i++)
-				returnvalue.push_back(buffer[i]);
-			return returnvalue;
+			return std::string(buffer.get(), realSize);
 		}
 
 		template<>
@@ -167,11 +163,7 @@ namespace DC {
 			if (realSize > size)
 				throw ERROR_CANTREADFILE;
 
-			std::string returnvalue;
-			returnvalue.reserve(realSize);
-			for (int i = 0; i < realSize; i++)
-				returnvalue.push_back(buffer[i]);
-			return returnvalue;
+			return std::string(buffer.get(), realSize);
 		}
 
 		template<typename FLAG = text>

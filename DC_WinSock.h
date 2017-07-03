@@ -5,8 +5,8 @@
 #include <string>
 #include <memory>
 #pragma comment(lib, "ws2_32.lib")
-//Version 2.4.21V6
-//20170623
+//Version 2.4.21V7
+//20170703
 //注意:DC_WinSock.h必须先于DC_MySQL.h包含
 
 namespace DC {
@@ -15,7 +15,7 @@ namespace DC {
 
 		using Address = sockaddr_in;
 		using Socket = SOCKET;
-		
+
 		Address MakeAddr(const std::string& address, std::size_t port) {
 			sockaddr_in addr;
 			addr.sin_family = AF_INET;
@@ -102,8 +102,7 @@ namespace DC {
 		}
 
 		inline bool Send(SOCKET s, const std::string& str) {
-			if (send(s, str.c_str(), str.size(), 0) != SOCKET_ERROR) return true;
-			return false;
+			return send(s, str.c_str(), str.size(), 0) != SOCKET_ERROR;
 		}
 
 		bool Recv(SOCKET s, std::string& str, std::size_t len) {
@@ -111,8 +110,7 @@ namespace DC {
 			std::unique_ptr<char[]> recvMessagech(new char[len + 1]);
 			int ret = recv(s, recvMessagech.get(), len, 0);
 			if (ret > 0) {
-				recvMessagech.get()[ret] = NULL;
-				str = recvMessagech.get();
+				str = std::string(recvMessagech.get(), ret);
 				returnvalue = true;
 			}
 			return returnvalue;
