@@ -10,8 +10,8 @@
 #include "DC_timer.h"
 #include "DC_ReadWriteMutex.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V8
-//20170703
+//Version 2.4.21V9
+//20170711
 
 namespace DC {
 
@@ -566,7 +566,7 @@ namespace DC {
 						if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC) || PSC->getSock() == INVALID_SOCKET) return false;
 
 						try {
-							OnRecv(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
+							OnRecv(PSC, std::string(PIC->m_wsabuf.buf, PIC->m_wsabuf.len), PSC->m_clientAddr);
 						}
 						catch (const DC::DC_ERROR& err) {
 							this->OnError(err);
@@ -603,7 +603,7 @@ namespace DC {
 						if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC) || PSC->getSock() == INVALID_SOCKET) return false;
 
 						try {
-							OnSend(PSC, PIC->m_wsabuf.buf, PSC->m_clientAddr);
+							OnSend(PSC, std::string(PIC->m_wsabuf.buf, PIC->m_wsabuf.len), PSC->m_clientAddr);
 							PSC->drop(PIC);
 						}
 						catch (const DC::DC_ERROR& err) {
