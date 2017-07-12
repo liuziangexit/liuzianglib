@@ -10,8 +10,8 @@
 #include "DC_timer.h"
 #include "DC_ReadWriteMutex.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V9
-//20170711
+//Version 2.4.21V10
+//20170712
 
 namespace DC {
 
@@ -112,6 +112,15 @@ namespace DC {
 						}
 						delete this;
 					}
+
+					void destroy_nofree() {
+						CloseSock();
+
+						if (!IOCPSpace::isNull(m_wsabuf.buf)) {
+							delete[] m_wsabuf.buf;
+						}
+						//delete this;
+					}
 				};
 
 				class PerSocketContext;
@@ -120,8 +129,20 @@ namespace DC {
 
 					struct PICdeleter {
 					public:
-						inline void operator()(IOCP::PerIOContext *ptr) {
+						inline void operator()(IOCP::PerIOContext *ptr)const {
 							ptr->destroy();
+						}
+					};
+					
+					struct TEMPdeleter {
+					public:
+						inline void operator()(void *ptr) {
+							DC::Web::Server::IOCP::PerIOContext *PIOptr(reinterpret_cast<DC::Web::Server::IOCP::PerIOContext*>(reinterpret_cast<std::size_t*>(ptr) + 1));
+							std::size_t *thread_num(reinterpret_cast<std::size_t*>(ptr));
+							for (int i = 0; i < *thread_num; i++, PIOptr++) {
+								PIOptr->destroy_nofree();
+							}
+							free(ptr);
 						}
 					};
 
@@ -499,11 +520,15 @@ namespace DC {
 
 					inline void Stop() {//可以多次调用，不会出现错误
 										//向工作线程发送停止信号
-						std::vector<DC::Web::Server::IOCP::PICptr> temp;
-						for (int i = 0; i < ThreadNumber; i++)
-							temp.emplace_back(new DC::Web::Server::IOCP::PerIOContext(1));
-						for (auto& p : temp)
-							PostExit(p.get());
+						std::unique_ptr<void, IOCPSpace::TEMPdeleter> temp(malloc(sizeof(DC::Web::Server::IOCP::PerIOContext)*ThreadNumber + sizeof(std::size_t)));
+						if (IOCPSpace::isNull(temp.get())) return;
+						DC::Web::Server::IOCP::PerIOContext *ptr(reinterpret_cast<DC::Web::Server::IOCP::PerIOContext*>(reinterpret_cast<std::size_t*>(temp.get()) + 1));
+						std::size_t *thread_num_ptr(reinterpret_cast<std::size_t*>(temp.get()));
+						*thread_num_ptr = ThreadNumber;
+						for (int i = 0; i < ThreadNumber; i++, ptr++) {
+							new(ptr) DC::Web::Server::IOCP::PerIOContext(1);
+							PostExit(ptr);
+						}
 
 						//停止监听
 						if (m_listen != INVALID_SOCKET)
