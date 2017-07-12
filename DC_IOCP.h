@@ -526,7 +526,7 @@ namespace DC {
 						std::size_t *thread_num_ptr(reinterpret_cast<std::size_t*>(temp.get()));
 						*thread_num_ptr = ThreadNumber;
 						for (int i = 0; i < ThreadNumber; i++, ptr++) {
-							new(ptr) DC::Web::Server::IOCP::PerIOContext(1);
+							new(ptr) DC::Web::Server::IOCP::PerIOContext(0);
 							PostExit(ptr);
 						}
 
