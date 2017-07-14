@@ -10,8 +10,8 @@
 #include "DC_timer.h"
 #include "DC_ReadWriteMutex.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V10
-//20170712
+//Version 2.4.21V11
+//20170714
 
 namespace DC {
 
@@ -63,13 +63,12 @@ namespace DC {
 					OperationType m_opType;
 					SOCKET m_sock;
 					WSABUF m_wsabuf;
+					std::size_t m_wsabuf_reallen;
 					IOCPSpace::unique_id uniqueid;
 
 				public:
-					PerIOContext(const std::size_t& buffersize) {
+					PerIOContext(const std::size_t& buffersize) :m_sock(INVALID_SOCKET), m_opType(OperationType::NULL_POSTED), m_wsabuf_reallen(0) {
 						memset(&m_overlapped, NULL, sizeof(m_overlapped));
-						m_sock = INVALID_SOCKET;
-						m_opType = OperationType::NULL_POSTED;
 
 						m_wsabuf.len = buffersize;
 						if (buffersize != 0) {
@@ -579,6 +578,7 @@ namespace DC {
 						PIC->m_opType = RECV_POSTED;
 
 						int nBytesRecv = WSARecv(PSC->getSock(), &PIC->m_wsabuf, 1, &dwBytes, &dwFlags, &PIC->m_overlapped, NULL);
+						PIC->m_wsabuf_reallen = dwBytes;//实际收到的字节
 
 						if (SOCKET_ERROR == nBytesRecv) {
 							if (WSA_IO_PENDING != WSAGetLastError())
@@ -591,7 +591,7 @@ namespace DC {
 						if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC) || PSC->getSock() == INVALID_SOCKET) return false;
 
 						try {
-							OnRecv(PSC, std::string(PIC->m_wsabuf.buf, PIC->m_wsabuf.len), PSC->m_clientAddr);
+							OnRecv(PSC, std::string(PIC->m_wsabuf.buf, PIC->m_wsabuf_reallen), PSC->m_clientAddr);
 						}
 						catch (const DC::DC_ERROR& err) {
 							this->OnError(err);
@@ -614,6 +614,7 @@ namespace DC {
 						PIC->resetBuffer();
 						memcpy(PIC->m_wsabuf.buf, sendthis.c_str(), sendthis.size());
 						PIC->m_opType = SEND_POSTED;
+						PIC->m_wsabuf_reallen = sendthis.size();
 
 						int nBytesRecv = WSASend(PSC->getSock(), &PIC->m_wsabuf, 1, &dwBytes, dwFlags, &PIC->m_overlapped, NULL);
 
