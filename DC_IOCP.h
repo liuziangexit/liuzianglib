@@ -10,7 +10,7 @@
 #include "DC_timer.h"
 #include "DC_ReadWriteMutex.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V11
+//Version 2.4.21V13
 //20170714
 
 namespace DC {
@@ -63,12 +63,13 @@ namespace DC {
 					OperationType m_opType;
 					SOCKET m_sock;
 					WSABUF m_wsabuf;
-					std::size_t m_wsabuf_reallen;
 					IOCPSpace::unique_id uniqueid;
 
 				public:
-					PerIOContext(const std::size_t& buffersize) :m_sock(INVALID_SOCKET), m_opType(OperationType::NULL_POSTED), m_wsabuf_reallen(0) {
+					PerIOContext(const std::size_t& buffersize) {
 						memset(&m_overlapped, NULL, sizeof(m_overlapped));
+						m_sock = INVALID_SOCKET;
+						m_opType = OperationType::NULL_POSTED;
 
 						m_wsabuf.len = buffersize;
 						if (buffersize != 0) {
@@ -578,7 +579,6 @@ namespace DC {
 						PIC->m_opType = RECV_POSTED;
 
 						int nBytesRecv = WSARecv(PSC->getSock(), &PIC->m_wsabuf, 1, &dwBytes, &dwFlags, &PIC->m_overlapped, NULL);
-						PIC->m_wsabuf_reallen = dwBytes;//实际收到的字节
 
 						if (SOCKET_ERROR == nBytesRecv) {
 							if (WSA_IO_PENDING != WSAGetLastError())
@@ -587,11 +587,13 @@ namespace DC {
 						return true;
 					}
 
-					inline bool DoRecv(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
+					inline bool DoRecv(PerSocketContext *PSC, PerIOContext *PIC, const DWORD& length)noexcept {
 						if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC) || PSC->getSock() == INVALID_SOCKET) return false;
 
 						try {
-							OnRecv(PSC, std::string(PIC->m_wsabuf.buf, PIC->m_wsabuf_reallen), PSC->m_clientAddr);
+							//length来自GetQueuedCompletionStatus指示的已传输bytes，原来想在WSARecv的时候就直接获取已传输的字节数，但是WSARecv在IO_PENDING时候会说字节数为0。所以要获取最终的字节数，还是要找GetQueuedCompletionStatus
+							if (length > PIC->m_wsabuf.len) throw DC::Exception("DoRecv", "length>wsabuf.len");
+							OnRecv(PSC, std::string(PIC->m_wsabuf.buf, length), PSC->m_clientAddr);
 						}
 						catch (const DC::DC_ERROR& err) {
 							this->OnError(err);
@@ -614,7 +616,6 @@ namespace DC {
 						PIC->resetBuffer();
 						memcpy(PIC->m_wsabuf.buf, sendthis.c_str(), sendthis.size());
 						PIC->m_opType = SEND_POSTED;
-						PIC->m_wsabuf_reallen = sendthis.size();
 
 						int nBytesRecv = WSASend(PSC->getSock(), &PIC->m_wsabuf, 1, &dwBytes, dwFlags, &PIC->m_overlapped, NULL);
 
@@ -625,11 +626,11 @@ namespace DC {
 						return true;
 					}
 
-					inline bool DoSend(PerSocketContext *PSC, PerIOContext *PIC)noexcept {
+					inline bool DoSend(PerSocketContext *PSC, PerIOContext *PIC, const DWORD& length)noexcept {
 						if (IOCPSpace::isNull(PSC) || IOCPSpace::isNull(PIC) || PSC->getSock() == INVALID_SOCKET) return false;
 
 						try {
-							OnSend(PSC, std::string(PIC->m_wsabuf.buf, PIC->m_wsabuf.len), PSC->m_clientAddr);
+							OnSend(PSC, std::string(PIC->m_wsabuf.buf, length), PSC->m_clientAddr);
 							PSC->drop(PIC);
 						}
 						catch (const DC::DC_ERROR& err) {
@@ -678,10 +679,10 @@ namespace DC {
 
 							switch (pIOContext->m_opType) {
 							case OperationType::RECV_POSTED: {
-								DoRecv(pSocketContext, pIOContext);
+								DoRecv(pSocketContext, pIOContext, dwBytesTransfered);
 							}break;
 							case OperationType::SEND_POSTED: {
-								DoSend(pSocketContext, pIOContext);
+								DoSend(pSocketContext, pIOContext, dwBytesTransfered);
 							}break;
 							case OperationType::NULL_POSTED: {
 								return;
