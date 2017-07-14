@@ -7,8 +7,8 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_Exception.h"
-//Version 2.4.21V2
-//20170607
+//Version 2.4.21V12
+//20170714
 
 namespace DC {
 
@@ -253,15 +253,10 @@ namespace DC {
 					return returnthis;
 				}
 
-				template <typename T, class = typename std::enable_if_t< !std::is_base_of<jsonBuilderSpace::NV_base, std::decay_t<T>>::value, T>>
-				void add(const std::string& name, const T& v) {//obj或array。任何带有成员函数toString，并且不是从jsonBuilderSpace::NV_base派生的类型也可以。
-														  //add时不会检查内部是否有重复的name
-					static_assert(jsonBuilderSpace::has_member_function_toString<std::decay_t<T>>::result, "value type doesnt have member function \"std::string toString(void)const\"");
-					m_data.emplace_back(name, v.toString());
-				}
-
-				inline void add(const std::string& name, const jsonBuilderSpace::NV_base& v) {//number或value
-																							  //add时不会检查内部是否有重复的name
+				template <typename T>
+				void add(const std::string& name, const T& v) {//任何带有成员函数toString的类型
+															   //add时不会检查内部是否有重复的name
+															   //static_assert(jsonBuilderSpace::has_member_function_toString<std::decay_t<T>>::result, "value type doesnt have member function \"std::string toString(void)const\"");
 					m_data.emplace_back(name, v.toString());
 				}
 
@@ -315,17 +310,17 @@ namespace DC {
 					return returnthis;
 				}
 
-				inline void add(const std::string& name, const object& v) {//object和array
-																		   //由于参数不同，基类两个add自动被隐藏
-																		   //add时不会检查内部是否有重复的name
-					                                                       //此重载版本指定的name被用于replace。如果你用另一个add重载，那么就不能对放进去的值进行replace(因为那个重载没有name
-					m_data.emplace_back(name, v.toString());
+				template <typename T>
+				void add(const T& v) {//任何带有成员函数toString的类型
+									  //static_assert(jsonBuilderSpace::has_member_function_toString<std::decay_t<T>>::result, "value type doesnt have member function \"std::string toString(void)const\"");
+					m_data.emplace_back(std::string(), v.toString());
 				}
 
-				inline void add(const object& v) {//object和array
-																		   //由于参数不同，基类两个add自动被隐藏
-																		   //add时不会检查内部是否有重复的name
-					m_data.emplace_back(std::string(""), v.toString());
+				template <typename T>
+				void add(const std::string& name, const T& v) {//任何带有成员函数toString的类型
+															   //add时不会检查内部是否有重复的name
+															   //static_assert(jsonBuilderSpace::has_member_function_toString<std::decay_t<T>>::result, "value type doesnt have member function \"std::string toString(void)const\"");
+					m_data.emplace_back(name, v.toString());
 				}
 			};
 
