@@ -17,6 +17,7 @@
 //3.使用方法不是继承，而是设置回调函数
 //4.main函数使用getch阻塞，可以手动clear或者暂停/开始
 //5.cleaner删除套接字资源前使用CancelIoEx清除IOCP内部队列中其上所有IO请求
+//6.worker线程检测到客户端已经断开连接或者超时了的话会立刻关闭套接字，但是套接字的资源依然要等cleaner来回收
 
 namespace DC {
 
