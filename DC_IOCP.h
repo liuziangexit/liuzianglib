@@ -7,10 +7,11 @@
 #include "DC_WinSock.h"
 #include "DC_ThreadPool.h"
 #include "DC_type.h"
+#include "DC_timer.h"
 #include "boost\lockfree\queue.hpp"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V14
-//20170721
+//Version 2.4.21V15
+//20170722
 
 //1.删掉不必要的部分
 //2.重写所有代码
@@ -138,9 +139,19 @@ namespace DC {
 					boost::lockfree::queue<pointer> m_list;
 				};
 
-				struct IOContext {};
+				struct IOContext {
+					OperationType m_type;
+					OVERLAPPED m_overlapped;					
+					WSABUF m_wsabuf;					
+				};
 
-				class SocketContext {};
+				class SocketContext {
+				public:
+				private:
+					DC::WinSock::Socket m_socket;
+					DC::WinSock::Address m_clientAddress;
+					DC::timer m_timer;
+				};
 
 				bool AssociateWithIOCP();
 
