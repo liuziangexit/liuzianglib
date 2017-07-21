@@ -8,14 +8,21 @@
 #include <sstream>
 #include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.2V49
-//20170606
+//Version 2.4.21V14
+//20170721
 
 namespace DC {
 
 	namespace STR {
-		
+
 		namespace STRSpace {
+
+			template <typename numtype>
+			std::size_t Howmuchdig(numtype num) {//返回num的位数，比如num=1000时，返回4
+				int32_t i = 0;
+				while (num > 1) { num /= 10; i++; }
+				if (num == 1) return i + 1; else return i;
+			}
 
 			std::vector<std::size_t> KMPSearch(const char *pat, const char *txt) {
 				std::size_t M = strlen(pat), N = strlen(txt), j = 0, i = 0;
@@ -319,12 +326,12 @@ namespace DC {
 			if (STRSpace::isNegative(num)) {
 				std::string rv("-");
 				auto abs = STRSpace::getAbs(num);
-				for (std::size_t i = Howmuchdig(abs); i > 0; i--)
+				for (std::size_t i = STRSpace::Howmuchdig(abs); i > 0; i--)
 					rv.push_back(STRSpace::getCharFromNum(STRSpace::getbitvalue(abs, i)));
 				return rv;
 			}
 			std::string rv;
-			for (std::size_t i = Howmuchdig(num); i > 0; i--)
+			for (std::size_t i = STRSpace::Howmuchdig(num); i > 0; i--)
 				rv.push_back(STRSpace::getCharFromNum(STRSpace::getbitvalue(num, i)));
 			return rv;
 		}

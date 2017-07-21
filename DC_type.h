@@ -2,10 +2,15 @@
 #ifndef liuzianglib_type
 #define liuzianglib_type
 #include <iostream>
-//Version 2.4.2
-//20170330
+//Version 2.4.21V14
+//20170721
+
+//This file only support MSVC
 
 namespace DC {
+
+	using byte_t = unsigned char;
+	using size_t = unsigned int;
 
 #ifdef _WIN64
 
