@@ -16,6 +16,7 @@
 //2.重写所有代码
 //3.使用方法不是继承，而是设置回调函数
 //4.main函数使用getch阻塞，可以手动clear或者暂停/开始
+//5.cleaner删除套接字资源前使用CancelIoEx清除IOCP内部队列中其上所有IO请求
 
 namespace DC {
 
