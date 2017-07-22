@@ -11,8 +11,8 @@
 #include "DC_timer.h"
 #include "boost\lockfree\queue.hpp"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V16
-//20170722
+//Version 2.4.21V17
+//20170723
 
 //1.删掉不必要的部分
 //2.重写所有代码
@@ -20,6 +20,9 @@
 //4.main函数使用getch阻塞，可以手动clear或者暂停/开始
 //5.cleaner删除套接字资源前使用CancelIoEx清除IOCP内部队列中其上所有IO请求
 //6.worker线程检测到客户端已经断开连接或者超时了的话会立刻关闭套接字，但是套接字的资源依然要等cleaner来回收
+
+#define TEMPBUFFERSIZE 1024
+void dosth()noexcept {};
 
 namespace DC {
 
@@ -98,9 +101,25 @@ namespace DC {
 						return ptr;
 					}
 
-					inline bool put(const value_type& obj)noexcept {
+					template <typename ...ARGS>
+					static pointer make_norecord(ARGS&& ...args)noexcept {
+						auto ptr = reinterpret_cast<pointer>(malloc(sizeof(value_type)));
+						if (ptr == NULL)
+							return nullptr;
+
 						try {
-							return m_list.push(obj);
+							new(ptr) value_type(std::forward<ARGS>(args)...);
+						}
+						catch (...) {
+							free(ptr);
+							ptr = nullptr;
+						}
+						return ptr;
+					}
+
+					inline bool put(value_type& obj)noexcept {
+						try {
+							return m_list.push(&obj);
 						}
 						catch (...) {
 							return false;
@@ -153,9 +172,8 @@ namespace DC {
 						return m_list.empty();
 					}
 
-				private:
-					inline void destory(pointer ptr) {
-						ptr->~value_type();
+					inline void destory(void* ptr) {
+						reinterpret_cast<pointer>(ptr)->~value_type();
 						free(ptr);
 					}
 
@@ -223,6 +241,7 @@ namespace DC {
 					SocketContext(const SocketContext&) = delete;
 
 					~SocketContext() {
+						if (isNull(this)) return;
 						close_socket();
 						this->m_IOContextPool.clear();
 					}
@@ -238,6 +257,10 @@ namespace DC {
 
 					DC::WinSock::Address get_client_address()const {
 						return m_clientAddress;
+					}
+
+					inline void set_client_address(const DC::WinSock::Address& input) {
+						m_clientAddress = input;
 					}
 
 					void close_socket() {
@@ -282,15 +305,23 @@ namespace DC {
 					QueueAllocator<IOContext> m_IOContextPool;
 				};
 
+				struct PSCdeleter {
+				public:
+					inline void operator()(SocketContext *ptr)const {
+						ptr->~SocketContext();
+						free(ptr);
+					}
+				};
+
 				inline bool AssociateWithIOCP(HANDLE IOCP, SocketContext* Socketptr) {
+					if (isNull(Socketptr)) return false;
 					if (!Socketptr->check_socket()) return false;
 					return CreateIoCompletionPort(reinterpret_cast<HANDLE>(Socketptr->get_socket()), IOCP, reinterpret_cast<ULONG_PTR>(Socketptr), 0) != NULL;
 				}
 
-				bool PostAccept(IOContext* IOptr, LPFN_ACCEPTEX AcceptExFunc) {
+				bool PostAccept(const SocketContext& ListenSocket, IOContext* IOptr, LPFN_ACCEPTEX AcceptExFunc) {
+					if (isNull(IOptr)) return false;
 					if (!IOptr->check_socket()) return false;
-
-					DC::WinSock::Socket listensocket = IOptr->m_socket;
 
 					DWORD dwBytes = 0;
 					IOptr->m_type = OperationType::ACCEPT;
@@ -301,7 +332,21 @@ namespace DC {
 						return false;
 					}
 
-					if (AcceptExFunc(listensocket, IOptr->m_socket, IOptr->m_wsabuf.buf, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, &dwBytes, &IOptr->m_overlapped) == FALSE) {
+					if (FALSE == AcceptExFunc(ListenSocket.get_socket(), IOptr->m_socket, IOptr->m_wsabuf.buf, 0, sizeof(DC::WinSock::Address) + 16, sizeof(DC::WinSock::Address) + 16, &dwBytes, &IOptr->m_overlapped))
+						if (WSA_IO_PENDING != WSAGetLastError())
+							return false;
+
+					return true;
+				}
+
+				bool PostRecv(IOContext* IOptr) {
+					if (isNull(IOptr)) return false;
+					if (!IOptr->check_socket()) return false;
+
+					DWORD dwBytes = 0, dwFlags = 0;
+					IOptr->m_type = OperationType::RECV;
+
+					if (SOCKET_ERROR == WSARecv(IOptr->m_socket, &IOptr->m_wsabuf, 1, &dwBytes, &dwFlags, &IOptr->m_overlapped, 0)) {
 						if (WSA_IO_PENDING != WSAGetLastError())
 							return false;
 					}
@@ -309,11 +354,15 @@ namespace DC {
 					return true;
 				}
 
-				bool PostRecv();
+				bool PostSend(IOContext* IOptr) {
+					if (isNull(IOptr)) return false;
+					if (!IOptr->check_socket()) return false;
+				}
 
-				bool PostSend();
-
-				bool PostExit();
+				bool PostExit(IOContext* IOptr) {
+					if (isNull(IOptr)) return false;
+					if (!IOptr->check_socket()) return false;
+				}
 
 				class dc_iocp_server final {
 				public:
@@ -380,28 +429,29 @@ namespace DC {
 							}
 							switch (PIC->m_type) {
 							case OperationType::RECV: {
-
+								dosth();
 							}break;
 							case OperationType::SEND: {
-
+								dosth();
 							}break;
 							case OperationType::ACCEPT: {
-
+								do_accept(PIC, this->m_GetAcceptExSockAddrs);
 							}break;
 							case OperationType::EXIT: {
 								return;
 							}break;
 							case OperationType::NOSET: {
-
+								dosth();
 							}break;
 							}
-
+							dosth();
 							//检查是否超时，是则关闭连接
 							/*
 							if (!isNull(PSC)) {
 								if (PSC->get_timer().getms() >= ConnectionTimeOut.load(std::memory_order_acquire)) pSocketContext->CloseSock(); }
 								*/
 						}
+						dosth();
 					}
 
 					void cleaner();
@@ -456,7 +506,7 @@ namespace DC {
 
 						for (DC::size_t i = 0; i < _Post_Size; i++) {
 							auto AcceptIOptr = m_listenSocket.make_IOContext(64);
-							if (!PostAccept(AcceptIOptr, this->m_AcceptEx)) {
+							if (!PostAccept(this->m_listenSocket, AcceptIOptr, this->m_AcceptEx)) {
 								m_listenSocket.clear_IOContext();
 								return false;
 							}
@@ -467,6 +517,37 @@ namespace DC {
 
 					void stop_listen() {
 
+					}
+
+					void do_accept(IOContext* IOptr, LPFN_GETACCEPTEXSOCKADDRS GetAcceptExSockAddrsFunc) {
+						DC::WinSock::Address *ClientAddress(nullptr), *ServerAddress(nullptr);
+						int ClientLen(sizeof(DC::WinSock::Address)), ServerLen(sizeof(DC::WinSock::Address));
+
+						GetAcceptExSockAddrsFunc(IOptr->m_wsabuf.buf, 0, sizeof(DC::WinSock::Address) + 16, sizeof(DC::WinSock::Address) + 16, reinterpret_cast<LPSOCKADDR*>(&ServerAddress), &ServerLen, reinterpret_cast<LPSOCKADDR*>(&ClientAddress), &ClientLen);
+						///*
+						std::string look = inet_ntoa(ClientAddress->sin_addr);						
+						std::cout << "新的客户端:" << look << "\n";
+						//*/
+
+
+						std::unique_ptr<SocketContext, PSCdeleter> NewClientContext(QueueAllocator<SocketContext>::make_norecord());
+						if (isNull(NewClientContext.get())) {
+							DC::WinSock::Close(IOptr->m_socket);
+							return;
+						}
+						NewClientContext->set_socket(IOptr->m_socket);
+						NewClientContext->set_client_address(*ClientAddress);
+
+						if (!AssociateWithIOCP(this->m_iocp, NewClientContext.get()))
+							return;
+
+						if (!PostRecv(NewClientContext->make_IOContext(TEMPBUFFERSIZE)))
+							return;
+
+						m_pscPool.put(*NewClientContext.release());
+
+						IOptr->reset_buffer();
+						PostAccept(this->m_listenSocket, IOptr, this->m_AcceptEx);
 					}
 
 				private:
