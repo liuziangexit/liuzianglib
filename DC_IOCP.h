@@ -11,7 +11,7 @@
 #include "DC_timer.h"
 #include "boost\lockfree\queue.hpp"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V17
+//Version 2.4.21V18
 //20170723
 
 //1.删掉不必要的部分
@@ -20,9 +20,6 @@
 //4.main函数使用getch阻塞，可以手动clear或者暂停/开始
 //5.cleaner删除套接字资源前使用CancelIoEx清除IOCP内部队列中其上所有IO请求
 //6.worker线程检测到客户端已经断开连接或者超时了的话会立刻关闭套接字，但是套接字的资源依然要等cleaner来回收
-
-#define TEMPBUFFERSIZE 1024
-void dosth()noexcept {};
 
 namespace DC {
 
@@ -287,6 +284,7 @@ namespace DC {
 					}
 
 					void remove_IOContext(IOContext* ptr) {
+						if (isNull(this)) return;
 						m_IOContextPool.remove_if([&ptr](const IOContext& it) {
 							return &it == ptr;
 						});
@@ -319,12 +317,13 @@ namespace DC {
 					return CreateIoCompletionPort(reinterpret_cast<HANDLE>(Socketptr->get_socket()), IOCP, reinterpret_cast<ULONG_PTR>(Socketptr), 0) != NULL;
 				}
 
-				bool PostAccept(const SocketContext& ListenSocket, IOContext* IOptr, LPFN_ACCEPTEX AcceptExFunc) {
+				bool PostAccept(const SocketContext& ListenSocket, IOContext* IOptr, LPFN_ACCEPTEX AcceptExFunc)noexcept {
 					if (isNull(IOptr)) return false;
 					if (!IOptr->check_socket()) return false;
 
 					DWORD dwBytes = 0;
 					IOptr->m_type = OperationType::ACCEPT;
+					IOptr->reset_buffer();
 
 					DC::WinSock::SocketInitOverlapped(IOptr->m_socket);
 					if (!IOptr->check_socket()) {
@@ -339,12 +338,13 @@ namespace DC {
 					return true;
 				}
 
-				bool PostRecv(IOContext* IOptr) {
+				bool PostRecv(IOContext* IOptr)noexcept {
 					if (isNull(IOptr)) return false;
 					if (!IOptr->check_socket()) return false;
 
 					DWORD dwBytes = 0, dwFlags = 0;
 					IOptr->m_type = OperationType::RECV;
+					IOptr->reset_buffer();
 
 					if (SOCKET_ERROR == WSARecv(IOptr->m_socket, &IOptr->m_wsabuf, 1, &dwBytes, &dwFlags, &IOptr->m_overlapped, 0)) {
 						if (WSA_IO_PENDING != WSAGetLastError())
@@ -354,218 +354,341 @@ namespace DC {
 					return true;
 				}
 
-				bool PostSend(IOContext* IOptr) {
-					if (isNull(IOptr)) return false;
-					if (!IOptr->check_socket()) return false;
-				}
+				bool PostSend(SocketContext* Socketptr, const std::string& sendstr)noexcept {
+					if (isNull(Socketptr)) return false;
+					if (!Socketptr->check_socket()) return false;
 
-				bool PostExit(IOContext* IOptr) {
-					if (isNull(IOptr)) return false;
-					if (!IOptr->check_socket()) return false;
-				}
+					DWORD dwBytes = sendstr.size();
 
-				class dc_iocp_server final {
-				public:
-					dc_iocp_server(const DC::size_t worker_threadnumber, const DC::size_t usercode_threadnumber, const std::string& listenip, const DC::size_t& listenport) :m_iocp(nullptr),
-						m_io_tp(worker_threadnumber), m_usercode_tp(usercode_threadnumber), m_listenAddress(DC::WinSock::MakeAddr(listenip, listenport)), m_pscPool(0) {
-						this->get_function();
-					}
-
-					dc_iocp_server(const dc_iocp_server&) = delete;
-
-					dc_iocp_server& operator=(const dc_iocp_server&) = delete;
-
-				public:
-					bool start() {
-						m_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-						auto look = start_listen(1);
-						m_io_tp.async(&dc_iocp_server::worker, this);
-						m_io_tp.start();
+					auto IOptr = Socketptr->make_IOContext(sendstr.size());
+					if (isNull(IOptr))
 						return false;
-					}
 
-					void stop();
+					memcpy(IOptr->m_wsabuf.buf, sendstr.c_str(), sendstr.size());
+					IOptr->m_type = OperationType::SEND;
 
-				public:
-					void set_client_max_alive_time();
-
-					void set_cleaner_wakeup_time();
-
-					void set_cleaner_max_block_time();
-
-					void set_recv_buffer_size();
-
-					void set_callback_onAccept();
-
-					void set_callback_onRecv();
-
-					void set_callback_onSend();
-
-					void set_callback_onExcept();
-
-				private:
-					void worker()noexcept {
-						DWORD dwBytesTransfered = 0;
-						OVERLAPPED *pOverlapped = nullptr;
-						SocketContext *PSC = nullptr;
-
-						while (true) {
-							BOOL GQrv = GetQueuedCompletionStatus(m_iocp, &dwBytesTransfered,
-								reinterpret_cast<PULONG_PTR>(&PSC), &pOverlapped, INFINITE);
-
-							//PSC为空(一般意味着完成端口已关闭)
-							if (isNull(PSC)) break;
-							//完成端口已关闭
-							if (isNull(m_iocp)) break;
-							//遇到了错误
-							if (!GQrv) continue;
-
-							IOContext *PIC = CONTAINING_RECORD(pOverlapped, IOContext, m_overlapped);
-
-							//客户端已经断开连接
-							if (dwBytesTransfered == 0 && (PIC->m_type == OperationType::SEND || PIC->m_type == OperationType::RECV)) {
-								PSC->close_socket();
-								continue;
-							}
-							switch (PIC->m_type) {
-							case OperationType::RECV: {
-								dosth();
-							}break;
-							case OperationType::SEND: {
-								dosth();
-							}break;
-							case OperationType::ACCEPT: {
-								do_accept(PIC, this->m_GetAcceptExSockAddrs);
-							}break;
-							case OperationType::EXIT: {
-								return;
-							}break;
-							case OperationType::NOSET: {
-								dosth();
-							}break;
-							}
-							dosth();
-							//检查是否超时，是则关闭连接
-							/*
-							if (!isNull(PSC)) {
-								if (PSC->get_timer().getms() >= ConnectionTimeOut.load(std::memory_order_acquire)) pSocketContext->CloseSock(); }
-								*/
-						}
-						dosth();
-					}
-
-					void cleaner();
-
-				private:
-					inline void get_function() {
-						DC::WinSock::Socket tempsock = INVALID_SOCKET;
-						GUID GuidAcceptEx = WSAID_ACCEPTEX;
-						GUID GuidGetAcceptExSockAddrs = WSAID_GETACCEPTEXSOCKADDRS;
-						DWORD dwBytes = 0;
-
-						DC::WinSock::SocketInitTCP(tempsock);
-
-						if (SOCKET_ERROR == WSAIoctl(tempsock, SIO_GET_EXTENSION_FUNCTION_POINTER, &GuidAcceptEx, sizeof(GuidAcceptEx), &this->m_AcceptEx, sizeof(this->m_AcceptEx), &dwBytes, NULL, NULL)) {
-							DC::WinSock::Close(tempsock);
-							throw DC::Exception("dc_iocp_server::get_function", "can not get the pointer of function AcceptEx");
-						}
-
-						if (SOCKET_ERROR == WSAIoctl(tempsock, SIO_GET_EXTENSION_FUNCTION_POINTER, &GuidGetAcceptExSockAddrs, sizeof(GuidGetAcceptExSockAddrs), &this->m_GetAcceptExSockAddrs, sizeof(this->m_GetAcceptExSockAddrs), &dwBytes, NULL, NULL)) {
-							DC::WinSock::Close(tempsock);
-							throw DC::Exception("dc_iocp_server::get_function", "can not get the pointer of function GetAcceptExSockAddrs");
-						}
-					}
-
-					bool start_listen(const DC::size_t& _Post_Size)noexcept {
-						if (m_listenSocket.get_socket() != INVALID_SOCKET)
+					if (SOCKET_ERROR == WSASend(Socketptr->get_socket(), &IOptr->m_wsabuf, 1, &dwBytes, 0, &IOptr->m_overlapped, 0))
+						if (WSA_IO_PENDING != WSAGetLastError())
 							return false;
 
-						DC::WinSock::Socket listensocket = INVALID_SOCKET;
-						DC::WinSock::SocketInitOverlapped(listensocket);
-						if (listensocket == INVALID_SOCKET)
-							return false;
-						m_listenSocket.set_socket(listensocket);
+					return true;
+				}
 
-						if (!AssociateWithIOCP(reinterpret_cast<HANDLE>(this->m_iocp), &m_listenSocket)) {
-							m_listenSocket.close_socket();
-							m_listenSocket.set_socket(INVALID_SOCKET);
-							return false;
-						}
+				bool PostExit(HANDLE IOCP, IOContext* IOptr)noexcept {
+					if (isNull(IOptr)) return false;
 
-						if (!DC::WinSock::Bind(m_listenSocket.get_socket(), this->m_listenAddress)) {
-							m_listenSocket.close_socket();
-							m_listenSocket.set_socket(INVALID_SOCKET);
-							return false;
-						}
+					IOptr->m_type = OperationType::EXIT;
 
-						if (!DC::WinSock::Listen(m_listenSocket.get_socket(), SOMAXCONN)) {
-							m_listenSocket.close_socket();
-							m_listenSocket.set_socket(INVALID_SOCKET);
-							return false;
-						}
-
-						for (DC::size_t i = 0; i < _Post_Size; i++) {
-							auto AcceptIOptr = m_listenSocket.make_IOContext(64);
-							if (!PostAccept(this->m_listenSocket, AcceptIOptr, this->m_AcceptEx)) {
-								m_listenSocket.clear_IOContext();
-								return false;
-							}
-						}
-
-						return true;
-					}
-
-					void stop_listen() {
-
-					}
-
-					void do_accept(IOContext* IOptr, LPFN_GETACCEPTEXSOCKADDRS GetAcceptExSockAddrsFunc) {
-						DC::WinSock::Address *ClientAddress(nullptr), *ServerAddress(nullptr);
-						int ClientLen(sizeof(DC::WinSock::Address)), ServerLen(sizeof(DC::WinSock::Address));
-
-						GetAcceptExSockAddrsFunc(IOptr->m_wsabuf.buf, 0, sizeof(DC::WinSock::Address) + 16, sizeof(DC::WinSock::Address) + 16, reinterpret_cast<LPSOCKADDR*>(&ServerAddress), &ServerLen, reinterpret_cast<LPSOCKADDR*>(&ClientAddress), &ClientLen);
-						///*
-						std::string look = inet_ntoa(ClientAddress->sin_addr);						
-						std::cout << "新的客户端:" << look << "\n";
-						//*/
-
-
-						std::unique_ptr<SocketContext, PSCdeleter> NewClientContext(QueueAllocator<SocketContext>::make_norecord());
-						if (isNull(NewClientContext.get())) {
-							DC::WinSock::Close(IOptr->m_socket);
-							return;
-						}
-						NewClientContext->set_socket(IOptr->m_socket);
-						NewClientContext->set_client_address(*ClientAddress);
-
-						if (!AssociateWithIOCP(this->m_iocp, NewClientContext.get()))
-							return;
-
-						if (!PostRecv(NewClientContext->make_IOContext(TEMPBUFFERSIZE)))
-							return;
-
-						m_pscPool.put(*NewClientContext.release());
-
-						IOptr->reset_buffer();
-						PostAccept(this->m_listenSocket, IOptr, this->m_AcceptEx);
-					}
-
-				private:
-					LPFN_ACCEPTEX m_AcceptEx;//AcceptEx
-					LPFN_GETACCEPTEXSOCKADDRS m_GetAcceptExSockAddrs;//GetAcceptExSockaddrs
-
-					HANDLE m_iocp;
-					SocketContext m_listenSocket;
-					DC::ThreadPool m_io_tp, m_usercode_tp;
-
-					DC::WinSock::Address m_listenAddress;
-
-					QueueAllocator<SocketContext> m_pscPool;
-				};
+					if (0 != PostQueuedCompletionStatus(IOCP, 0, reinterpret_cast<ULONG_PTR>(IOptr), &IOptr->m_overlapped)) return true;
+					return false;
+				}
 
 			}
 
-			using Server = IOCPSpace::dc_iocp_server;
+			using reply_type = std::function<bool(const std::string&)>;
+
+			template <typename OnAcceptCallbackType, typename OnRecvCallbackType, typename OnSendCallbackType, typename OnExceptCallbackType>
+			class Server final {
+			public:
+				Server(const DC::size_t& worker_threadnumber, const DC::size_t& usercode_threadnumber, const std::string& listenip, const DC::size_t& listenport,
+					const OnAcceptCallbackType& onacceptcallback,
+					const OnRecvCallbackType& onrecvcallback,
+					const OnSendCallbackType& onsendcallback,
+					const OnExceptCallbackType& onexceptcallback) :
+					m_iocp(nullptr), m_pscPool(0), m_io_tp(nullptr), m_usercode_tp(nullptr),
+					m_io_tp_threadnumber(worker_threadnumber), m_usercode_tp_threadnumber(usercode_threadnumber),
+					m_listenAddress(DC::WinSock::MakeAddr(listenip, listenport)), m_recvbuffer_length(1024),
+					m_onAcceptCallback(onacceptcallback),
+					m_onRecvCallback(onrecvcallback),
+					m_onSendCallback(onsendcallback),
+					m_onExceptCallback(onexceptcallback) {
+					this->get_wsa_extension_function();
+				}
+
+				Server(const Server&) = delete;
+
+				Server& operator=(const Server&) = delete;
+
+			public:
+				bool start(const DC::size_t& _Post_Accept_Number) {
+					stop();
+
+					start_tp();
+					if (!check_tp()) 
+						return false;
+					
+					m_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+					if (isNull(m_iocp)) {
+						stop_tp();
+						m_iocp = nullptr;
+						return false;
+					}
+
+					if (!start_listen(_Post_Accept_Number)) {
+						stop_tp();
+						CloseHandle(m_iocp);
+						m_iocp = nullptr;
+						m_pscPool.clear();
+						return false;
+					}
+
+					for (auto i = 0; i < m_io_tp_threadnumber; i++)
+						m_io_tp->async(&Server::worker, this);
+
+					m_io_tp->start();
+					m_usercode_tp->start();
+
+					return true;
+				}
+
+				void stop() {
+					stop_listen();
+					
+					IOCPSpace::QueueAllocator<IOCPSpace::IOContext> ExitIO(m_io_tp_threadnumber);
+					for (auto i = 0; i < m_io_tp_threadnumber; i++)
+						IOCPSpace::PostExit(m_iocp, ExitIO.make(0));
+
+					if (!isNull(m_iocp)) {
+						CloseHandle(m_iocp);
+						m_iocp = nullptr;
+					}
+
+					stop_tp();
+
+					m_pscPool.clear();
+					m_listenSocket.clear_IOContext();
+				}
+
+			public:
+				void set_client_alive_time();
+
+				void set_cleaner_wakeup_time();
+
+				void set_cleaner_max_block_time();
+
+				inline void set_recv_buffer_size(const DC::size_t& _Size) {
+					m_recvbuffer_length = _Size;
+				}
+
+			private:
+				void worker()noexcept {
+					DWORD dwBytesTransfered = 0;
+					OVERLAPPED *pOverlapped = nullptr;
+					IOCPSpace::SocketContext *PSC = nullptr;
+
+					while (true) {
+						BOOL GQrv = GetQueuedCompletionStatus(m_iocp, &dwBytesTransfered,
+							reinterpret_cast<PULONG_PTR>(&PSC), &pOverlapped, INFINITE);
+
+						//PSC为空(一般意味着完成端口已关闭)
+						if (isNull(PSC)) break;
+						//完成端口已关闭
+						if (isNull(m_iocp)) break;
+						//遇到了错误
+						if (!GQrv) continue;
+
+						IOCPSpace::IOContext* PIC = CONTAINING_RECORD(pOverlapped, IOCPSpace::IOContext, m_overlapped);
+
+						//客户端已经断开连接
+						if (dwBytesTransfered == 0 && (PIC->m_type == IOCPSpace::OperationType::SEND || PIC->m_type == IOCPSpace::OperationType::RECV)) {
+							PSC->close_socket();
+							continue;
+						}
+						switch (PIC->m_type) {
+						case IOCPSpace::OperationType::RECV: {
+							do_recv(PSC, PIC, dwBytesTransfered);
+						}break;
+						case IOCPSpace::OperationType::SEND: {
+							do_send(PSC, PIC, dwBytesTransfered);
+						}break;
+						case IOCPSpace::OperationType::ACCEPT: {
+							do_accept(PIC, this->m_GetAcceptExSockAddrs);
+						}break;
+						case IOCPSpace::OperationType::EXIT: {
+							return;
+						}break;
+						case IOCPSpace::OperationType::NOSET: {
+						}break;
+						}
+						//检查是否超时，是则关闭连接
+						/*
+						if (!isNull(PSC)) {
+						if (PSC->get_timer().getms() >= ConnectionTimeOut.load(std::memory_order_acquire)) pSocketContext->CloseSock(); }
+						*/
+					}
+				}
+
+				void cleaner();
+
+			private:
+				inline void get_wsa_extension_function() {
+					DC::WinSock::Socket tempsock = INVALID_SOCKET;
+					GUID GuidAcceptEx = WSAID_ACCEPTEX;
+					GUID GuidGetAcceptExSockAddrs = WSAID_GETACCEPTEXSOCKADDRS;
+					DWORD dwBytes = 0;
+
+					DC::WinSock::SocketInitTCP(tempsock);
+
+					if (SOCKET_ERROR == WSAIoctl(tempsock, SIO_GET_EXTENSION_FUNCTION_POINTER, &GuidAcceptEx, sizeof(GuidAcceptEx), &this->m_AcceptEx, sizeof(this->m_AcceptEx), &dwBytes, NULL, NULL)) {
+						DC::WinSock::Close(tempsock);
+						throw DC::Exception("dc_iocp_server::get_function", "can not get the pointer of function AcceptEx");
+					}
+
+					if (SOCKET_ERROR == WSAIoctl(tempsock, SIO_GET_EXTENSION_FUNCTION_POINTER, &GuidGetAcceptExSockAddrs, sizeof(GuidGetAcceptExSockAddrs), &this->m_GetAcceptExSockAddrs, sizeof(this->m_GetAcceptExSockAddrs), &dwBytes, NULL, NULL)) {
+						DC::WinSock::Close(tempsock);
+						throw DC::Exception("dc_iocp_server::get_function", "can not get the pointer of function GetAcceptExSockAddrs");
+					}
+				}
+
+				bool start_listen(const DC::size_t& _Post_Size)noexcept {
+					if (m_listenSocket.get_socket() != INVALID_SOCKET)
+						return false;
+
+					DC::WinSock::Socket listensocket = INVALID_SOCKET;
+					DC::WinSock::SocketInitOverlapped(listensocket);
+					if (listensocket == INVALID_SOCKET)
+						return false;
+					m_listenSocket.set_socket(listensocket);
+
+					if (!IOCPSpace::AssociateWithIOCP(reinterpret_cast<HANDLE>(this->m_iocp), &m_listenSocket)) {
+						m_listenSocket.close_socket();
+						m_listenSocket.set_socket(INVALID_SOCKET);
+						return false;
+					}
+
+					if (!DC::WinSock::Bind(m_listenSocket.get_socket(), this->m_listenAddress)) {
+						m_listenSocket.close_socket();
+						m_listenSocket.set_socket(INVALID_SOCKET);
+						return false;
+					}
+
+					if (!DC::WinSock::Listen(m_listenSocket.get_socket(), SOMAXCONN)) {
+						m_listenSocket.close_socket();
+						m_listenSocket.set_socket(INVALID_SOCKET);
+						return false;
+					}
+
+					for (DC::size_t i = 0; i < _Post_Size; i++) {
+						auto AcceptIOptr = m_listenSocket.make_IOContext(64);
+						if (!PostAccept(this->m_listenSocket, AcceptIOptr, this->m_AcceptEx)) {
+							m_listenSocket.clear_IOContext();
+							return false;
+						}
+					}
+
+					return true;
+				}
+
+				void stop_listen() {
+					m_listenSocket.close_socket();
+				}
+
+				void do_accept(IOCPSpace::IOContext* IOptr, LPFN_GETACCEPTEXSOCKADDRS GetAcceptExSockAddrsFunc) {
+					DC::WinSock::Address *ClientAddress(nullptr), *ServerAddress(nullptr);
+					int ClientLen(sizeof(DC::WinSock::Address)), ServerLen(sizeof(DC::WinSock::Address));
+
+					GetAcceptExSockAddrsFunc(IOptr->m_wsabuf.buf, 0, sizeof(DC::WinSock::Address) + 16, sizeof(DC::WinSock::Address) + 16, reinterpret_cast<LPSOCKADDR*>(&ServerAddress), &ServerLen, reinterpret_cast<LPSOCKADDR*>(&ClientAddress), &ClientLen);
+					std::string ClientAddressString(inet_ntoa(ClientAddress->sin_addr));
+
+					std::unique_ptr<IOCPSpace::SocketContext, IOCPSpace::PSCdeleter> NewClientContext(IOCPSpace::QueueAllocator<IOCPSpace::SocketContext>::make_norecord());
+					if (isNull(NewClientContext.get())) {
+						DC::WinSock::Close(IOptr->m_socket);
+						return;
+					}
+					NewClientContext->set_socket(IOptr->m_socket);
+					NewClientContext->set_client_address(*ClientAddress);
+
+					if (!IOCPSpace::AssociateWithIOCP(this->m_iocp, NewClientContext.get()))
+						return;
+
+					if (!IOCPSpace::PostRecv(NewClientContext->make_IOContext(m_recvbuffer_length)))
+						return;
+
+					m_pscPool.put(*NewClientContext.release());
+
+					PostAccept(this->m_listenSocket, IOptr, this->m_AcceptEx);
+
+					invoke_usercode(m_onAcceptCallback, ClientAddressString);
+				}
+
+				void do_recv(IOCPSpace::SocketContext *Socketptr, IOCPSpace::IOContext *IOptr, const DC::size_t& length) {
+					if (isNull(IOptr)) return;
+					if (!IOptr->check_socket()) return;
+
+					invoke_usercode(m_onRecvCallback, std::string(IOptr->m_wsabuf.buf, length), DC::WinSock::GetAddrString(Socketptr->get_client_address()), [Socketptr](const std::string& sendstr)->bool {
+						return IOCPSpace::PostSend(Socketptr, sendstr);
+					});
+
+					PostRecv(IOptr);
+				}
+
+				void do_send(IOCPSpace::SocketContext *Socketptr, IOCPSpace::IOContext *IOptr, const DC::size_t& length) {
+					if (isNull(IOptr)) return;
+					if (!IOptr->check_socket()) return;
+
+					if (length > IOptr->m_wsabuf.len)
+						invoke_usercode(m_onExceptCallback, DC::Exception("do_send", "wsabuf.len<dwBytesTransfered"));
+					else
+						invoke_usercode(m_onSendCallback, std::string(IOptr->m_wsabuf.buf, length));
+
+					Socketptr->remove_IOContext(IOptr);
+				}
+
+				inline void start_tp()noexcept {
+					m_io_tp = new(std::nothrow) DC::ThreadPool(m_io_tp_threadnumber);
+					m_usercode_tp = new(std::nothrow) DC::ThreadPool(m_usercode_tp_threadnumber);
+				}
+
+				inline bool check_tp()const noexcept {
+					return !isNull(m_io_tp) && !isNull(m_usercode_tp);
+				}
+
+				inline void stop_tp()noexcept {
+					if (!isNull(m_io_tp)) {
+						delete m_io_tp;
+						m_io_tp = nullptr;
+					}
+					if (!isNull(m_usercode_tp)) {
+						delete m_usercode_tp;
+						m_usercode_tp = nullptr;
+					}
+				}
+
+				template <typename USERCODE, typename ...ARGS>
+				inline void invoke_usercode(USERCODE&& usercode, ARGS&& ...args)const {
+					m_usercode_tp->async([this, usercode, args...]() {//捕获参数列表是拷贝语义，防止参数失效
+						try {
+							usercode(args...);
+						}
+						catch (const DC::Exception& ex) {
+							this->m_onExceptCallback(ex);
+						}
+						catch (...) {
+							this->m_onExceptCallback(DC::Exception("run_usercode", "uncaught exception"));
+						}
+					});
+				}
+
+			private:
+				LPFN_ACCEPTEX m_AcceptEx;//AcceptEx
+				LPFN_GETACCEPTEXSOCKADDRS m_GetAcceptExSockAddrs;//GetAcceptExSockaddrs
+
+				HANDLE m_iocp;
+				IOCPSpace::SocketContext m_listenSocket;
+				DC::ThreadPool *m_io_tp, *m_usercode_tp;
+
+				DC::WinSock::Address m_listenAddress;
+
+				IOCPSpace::QueueAllocator<IOCPSpace::SocketContext> m_pscPool;
+
+				const DC::size_t m_io_tp_threadnumber, m_usercode_tp_threadnumber;
+				DC::size_t m_recvbuffer_length;//default length==1024
+
+				OnAcceptCallbackType m_onAcceptCallback;//ANY(const std::string& clientip)
+				OnRecvCallbackType m_onRecvCallback;//ANY(const std::string& recvstr, const std::string& clientip, const DC::Web::IOCP::reply_type& reply)
+				OnSendCallbackType m_onSendCallback;//ANY(const std::string& sendstr)
+				OnExceptCallbackType m_onExceptCallback;//ANY(const DC::Exception& ex)
+			};
 
 		}
 
