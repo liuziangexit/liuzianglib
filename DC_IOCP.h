@@ -9,10 +9,10 @@
 #include "DC_ThreadPool.h"
 #include "DC_type.h"
 #include "DC_timer.h"
-#include "boost\lockfree\queue.hpp"
+#include <vector>
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V18
-//20170723
+//Version 2.4.21V19
+//20170724
 
 //1.删掉不必要的部分
 //2.重写所有代码
@@ -55,7 +55,7 @@ namespace DC {
 				enum OperationType { ACCEPT, SEND, RECV, EXIT, NOSET };
 
 				template <typename _Ty>
-				class QueueAllocator final {//designed for DC::IOCP
+				class IOCPAllocator final {//designed for DC::IOCP
 				public:
 					using value_type = _Ty;
 					using pointer = _Ty*;
@@ -66,18 +66,15 @@ namespace DC {
 					using size_t = DC::size_t;
 
 				public:
-					QueueAllocator(size_t size) :m_list(size) {}
+					IOCPAllocator(size_t size) :m_list(size) {}
 
-					QueueAllocator(const QueueAllocator&) = delete;
+					IOCPAllocator(const IOCPAllocator&) = delete;
 
-					~QueueAllocator()noexcept {
+					~IOCPAllocator()noexcept {
 						this->clear();
 					}
 
 				public:
-					//create a new value_type object in list and return the pointer of the new object.
-					//if malloc or construction failed,it will return false.
-					//thread-safe but maybe not lock-free(depending on the implementation of malloc)
 					template <typename ...ARGS>
 					pointer make(ARGS&& ...args)noexcept {
 						auto ptr = reinterpret_cast<pointer>(malloc(sizeof(value_type)));
@@ -86,10 +83,8 @@ namespace DC {
 
 						try {
 							new(ptr) value_type(std::forward<ARGS>(args)...);
-							if (!m_list.push(ptr)) {
-								destory(ptr);
-								ptr = nullptr;
-							}
+							std::lock_guard<std::mutex> lm_mut(m_mut);
+							m_list.push_back(ptr);
 						}
 						catch (...) {
 							free(ptr);
@@ -114,54 +109,27 @@ namespace DC {
 						return ptr;
 					}
 
-					inline bool put(value_type& obj)noexcept {
+					inline void put(value_type& obj)noexcept {
 						try {
-							return m_list.push(&obj);
-						}
-						catch (...) {
-							return false;
-						}
-					}
-
-					template <typename Functor>
-					bool remove_if(const Functor& _Pred)noexcept {//deconstruct and deallocate the back item in the queue, if _Pred return true.
-																  //otherwise push the item(already popped) back to queue.
-																  //_Pred should not throw exception
-																  //if _Pred has been executed, return true, otherwise return false
-						pointer ptr = nullptr;
-						if (!m_list.pop(ptr))
-							return false;
-
-						bool PredRv;
-						try {
-							PredRv = _Pred(*ptr);
-						}
-						catch (...) {
-							if (!m_list.push(ptr))
-								destory(ptr);
-							return true;
-						}
-
-						try {
-							if (!PredRv) {
-								if (!m_list.push(ptr))
-									destory(ptr);
-							}
-							else
-								destory(ptr);
+							std::lock_guard<std::mutex> lm_mut(m_mut);
+							m_list.push_back(&obj);
 						}
 						catch (...) {}
-
-						return true;
 					}
 
-					void clear()noexcept {//not thread-safe		 
-						pointer ptr = nullptr;
-						while (m_list.pop(ptr)) {
-							if (ptr == nullptr) continue;
-							destory(ptr);
-						}
+					void remove(pointer ptr) {
+						std::lock_guard<std::mutex> lm_mut(m_mut);
 
+						auto fres = std::find_if(m_list.begin(), m_list.end(), [&ptr](const pointer& it) {
+							return ptr == it;
+						});
+						if (fres == m_list.end()) return;
+
+						destory(*fres);
+						DC::vector_fast_erase_no_return(m_list, fres);
+					}
+
+					void clear()noexcept {
 						m_list.reserve(0);
 					}
 
@@ -170,12 +138,22 @@ namespace DC {
 					}
 
 					inline void destory(void* ptr) {
+						if (isNull(ptr)) return;
 						reinterpret_cast<pointer>(ptr)->~value_type();
 						free(ptr);
 					}
 
+					std::vector<pointer>& get_list() {
+						return m_list;
+					}
+
+					std::mutex& get_mut() {
+						return m_mut;
+					}
+
 				private:
-					boost::lockfree::queue<pointer> m_list;
+					std::vector<pointer> m_list;
+					std::mutex m_mut;
 				};
 
 				struct IOContext {
@@ -231,7 +209,7 @@ namespace DC {
 
 				class SocketContext {
 				public:
-					SocketContext() :m_IOContextPool(0), m_socket(INVALID_SOCKET) {
+					SocketContext() :m_IOContextPool(0), m_socket(INVALID_SOCKET), m_removeRightnow(false) {
 						memset(&m_clientAddress, 0, sizeof(m_clientAddress));
 					}
 
@@ -275,6 +253,14 @@ namespace DC {
 						return m_socket != INVALID_SOCKET;
 					}
 
+					inline void set_removeRightnow(bool _Val)noexcept {
+						m_removeRightnow.store(std::memory_order::memory_order_release);
+					}
+
+					inline bool get_removeRightnow()const noexcept {
+						return m_removeRightnow.load(std::memory_order::memory_order_acquire);
+					}
+
 				public:
 					template <typename ...ARGS>
 					inline IOContext* make_IOContext(ARGS&& ...args) {
@@ -285,9 +271,7 @@ namespace DC {
 
 					void remove_IOContext(IOContext* ptr) {
 						if (isNull(this)) return;
-						m_IOContextPool.remove_if([&ptr](const IOContext& it) {
-							return &it == ptr;
-						});
+						m_IOContextPool.remove(ptr);
 					}
 
 					void clear_IOContext() {
@@ -295,12 +279,13 @@ namespace DC {
 					}
 
 				private:
+					std::atomic<bool> m_removeRightnow;
 					DC::WinSock::Socket m_socket;
 					DC::WinSock::Address m_clientAddress;
 					DC::timer m_timer;
 					SpinLock m_socket_lock;
 
-					QueueAllocator<IOContext> m_IOContextPool;
+					IOCPAllocator<IOContext> m_IOContextPool;
 				};
 
 				struct PSCdeleter {
@@ -396,8 +381,9 @@ namespace DC {
 					const OnSendCallbackType& onsendcallback,
 					const OnExceptCallbackType& onexceptcallback) :
 					m_iocp(nullptr), m_pscPool(0), m_io_tp(nullptr), m_usercode_tp(nullptr),
-					m_io_tp_threadnumber(worker_threadnumber), m_usercode_tp_threadnumber(usercode_threadnumber),
-					m_listenAddress(DC::WinSock::MakeAddr(listenip, listenport)), m_recvbuffer_length(1024),
+					m_io_tp_threadnumber(worker_threadnumber + 1), m_usercode_tp_threadnumber(usercode_threadnumber),
+					m_listenAddress(DC::WinSock::MakeAddr(listenip, listenport)),
+					m_recvbuffer_length(1024), m_client_alive_time(15000), m_cleaner_sleep_time(4000), m_cleaner_max_block_time(2000),
 					m_onAcceptCallback(onacceptcallback),
 					m_onRecvCallback(onrecvcallback),
 					m_onSendCallback(onsendcallback),
@@ -408,6 +394,10 @@ namespace DC {
 				Server(const Server&) = delete;
 
 				Server& operator=(const Server&) = delete;
+
+				~Server() {
+					stop();
+				}
 
 			public:
 				bool start(const DC::size_t& _Post_Accept_Number) {
@@ -424,6 +414,7 @@ namespace DC {
 						return false;
 					}
 
+					///*
 					if (!start_listen(_Post_Accept_Number)) {
 						stop_tp();
 						CloseHandle(m_iocp);
@@ -431,9 +422,13 @@ namespace DC {
 						m_pscPool.clear();
 						return false;
 					}
+					//*/
 
-					for (auto i = 0; i < m_io_tp_threadnumber; i++)
+					for (auto i = 0; i < m_io_tp_threadnumber - 1; i++)
 						m_io_tp->async(&Server::worker, this);
+
+					stopFlag.store(false, std::memory_order::memory_order_release);
+					m_io_tp->async(&Server::cleaner, this);
 
 					m_io_tp->start();
 					m_usercode_tp->start();
@@ -444,7 +439,7 @@ namespace DC {
 				void stop() {
 					stop_listen();
 					
-					IOCPSpace::QueueAllocator<IOCPSpace::IOContext> ExitIO(m_io_tp_threadnumber);
+					IOCPSpace::IOCPAllocator<IOCPSpace::IOContext> ExitIO(m_io_tp_threadnumber);
 					for (auto i = 0; i < m_io_tp_threadnumber; i++)
 						IOCPSpace::PostExit(m_iocp, ExitIO.make(0));
 
@@ -453,6 +448,8 @@ namespace DC {
 						m_iocp = nullptr;
 					}
 
+					stopFlag.store(true, std::memory_order::memory_order_release);
+					this->cleanerCV.notify_one();
 					stop_tp();
 
 					m_pscPool.clear();
@@ -460,11 +457,17 @@ namespace DC {
 				}
 
 			public:
-				void set_client_alive_time();
+				inline void set_client_alive_time(const DC::size_t& _Time) {
+					m_client_alive_time = _Time;
+				}
 
-				void set_cleaner_wakeup_time();
+				inline void set_cleaner_sleep_time(const std::chrono::milliseconds& _Time) {
+					m_cleaner_sleep_time = _Time;
+				}
 
-				void set_cleaner_max_block_time();
+				inline void set_cleaner_max_block_time(const DC::size_t& _Time) {
+					m_cleaner_max_block_time = _Time;
+				}
 
 				inline void set_recv_buffer_size(const DC::size_t& _Size) {
 					m_recvbuffer_length = _Size;
@@ -511,14 +514,59 @@ namespace DC {
 						}break;
 						}
 						//检查是否超时，是则关闭连接
-						/*
 						if (!isNull(PSC)) {
-						if (PSC->get_timer().getms() >= ConnectionTimeOut.load(std::memory_order_acquire)) pSocketContext->CloseSock(); }
-						*/
+							if (PSC->get_timer().getms() >= m_client_alive_time) {
+								PSC->set_removeRightnow(true);
+								PSC->close_socket();
+							}
+						}
 					}
 				}
 
-				void cleaner();
+				void cleaner() {
+					DC::size_t& block_time = m_cleaner_max_block_time, client_alive_time = m_client_alive_time;
+					DC::timer timer;
+					std::chrono::milliseconds templimits = m_cleaner_sleep_time;
+
+					while (true) {
+						timer.reset();
+						timer.start();
+						std::unique_lock<std::mutex> lock(cleanerMut);
+						while (true) {
+							if (cleanerCV.wait_for(lock, templimits) == std::cv_status::timeout)
+								if (stopFlag.load(std::memory_order_acquire) == true)
+									return;//退出信号
+								else
+									break;//时间到，开始工作
+
+							timer.stop();
+
+							if (stopFlag.load(std::memory_order_acquire) == true)
+								return;//退出信号
+
+							if (std::chrono::milliseconds(timer.getms()) >= templimits)
+								break;//睡过头了
+
+									  //假唤醒，计算剩余时间开始新一轮等待
+							templimits = templimits - std::chrono::milliseconds(timer.getms());
+							timer.reset();
+							timer.start();
+						}
+
+						std::unique_lock<std::mutex> allocator_lock(m_pscPool.get_mut());
+						//debug
+						std::cout << "cleaner!\n";
+						timer.reset();
+						timer.start();
+						for (auto it(m_pscPool.get_list().begin()); it != m_pscPool.get_list().end(); it++) {
+							if (timer.getms() >= m_cleaner_max_block_time) break;
+							if ((*it)->get_timer().getms() >= m_client_alive_time) {
+								m_pscPool.remove(*it);
+								continue;
+							}
+						}
+					}
+				}
 
 			private:
 				inline void get_wsa_extension_function() {
@@ -579,8 +627,9 @@ namespace DC {
 					return true;
 				}
 
-				void stop_listen() {
+				inline void stop_listen() {
 					m_listenSocket.close_socket();
+					m_listenSocket.set_socket(INVALID_SOCKET);
 				}
 
 				void do_accept(IOCPSpace::IOContext* IOptr, LPFN_GETACCEPTEXSOCKADDRS GetAcceptExSockAddrsFunc) {
@@ -590,7 +639,7 @@ namespace DC {
 					GetAcceptExSockAddrsFunc(IOptr->m_wsabuf.buf, 0, sizeof(DC::WinSock::Address) + 16, sizeof(DC::WinSock::Address) + 16, reinterpret_cast<LPSOCKADDR*>(&ServerAddress), &ServerLen, reinterpret_cast<LPSOCKADDR*>(&ClientAddress), &ClientLen);
 					std::string ClientAddressString(inet_ntoa(ClientAddress->sin_addr));
 
-					std::unique_ptr<IOCPSpace::SocketContext, IOCPSpace::PSCdeleter> NewClientContext(IOCPSpace::QueueAllocator<IOCPSpace::SocketContext>::make_norecord());
+					std::unique_ptr<IOCPSpace::SocketContext, IOCPSpace::PSCdeleter> NewClientContext(IOCPSpace::IOCPAllocator<IOCPSpace::SocketContext>::make_norecord());
 					if (isNull(NewClientContext.get())) {
 						DC::WinSock::Close(IOptr->m_socket);
 						return;
@@ -677,12 +726,19 @@ namespace DC {
 				IOCPSpace::SocketContext m_listenSocket;
 				DC::ThreadPool *m_io_tp, *m_usercode_tp;
 
+				//这几个用于通知cleaner返回
+				std::condition_variable cleanerCV;
+				std::mutex cleanerMut;
+				std::atomic<bool> stopFlag;
+
 				DC::WinSock::Address m_listenAddress;
 
-				IOCPSpace::QueueAllocator<IOCPSpace::SocketContext> m_pscPool;
+				IOCPSpace::IOCPAllocator<IOCPSpace::SocketContext> m_pscPool;
 
 				const DC::size_t m_io_tp_threadnumber, m_usercode_tp_threadnumber;
-				DC::size_t m_recvbuffer_length;//default length==1024
+				DC::size_t m_recvbuffer_length, m_client_alive_time, m_cleaner_max_block_time;//default recvbuffer length==1024, default clientalivetime==15000, default cleanerwakeuptime==4000,
+				std::chrono::milliseconds m_cleaner_sleep_time;
+				//default cleaner_max_block_time==2000
 
 				OnAcceptCallbackType m_onAcceptCallback;//ANY(const std::string& clientip)
 				OnRecvCallbackType m_onRecvCallback;//ANY(const std::string& recvstr, const std::string& clientip, const DC::Web::IOCP::reply_type& reply)
