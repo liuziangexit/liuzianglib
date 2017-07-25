@@ -11,15 +11,8 @@
 #include "DC_timer.h"
 #include <vector>
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V19
-//20170724
-
-//1.删掉不必要的部分
-//2.重写所有代码
-//3.使用方法不是继承，而是设置回调函数
-//4.main函数使用getch阻塞，可以手动clear或者暂停/开始
-//5.cleaner删除套接字资源前使用CancelIoEx清除IOCP内部队列中其上所有IO请求
-//6.worker线程检测到客户端已经断开连接或者超时了的话会立刻关闭套接字，但是套接字的资源依然要等cleaner来回收
+//Version 2.4.21V20
+//20170725
 
 namespace DC {
 
@@ -52,7 +45,9 @@ namespace DC {
 					std::atomic_flag flag;
 				};
 
-				enum OperationType { ACCEPT, SEND, RECV, EXIT, NOSET };
+				enum OperationType { ACCEPT, SEND, RECV, EXIT, NOSET };//接收客户端连接，发送，收取，退出工作线程，未设置
+
+				enum ServerStatus { STOP, RUNNING, INVALID };
 
 				template <typename _Ty>
 				class IOCPAllocator final {//designed for DC::IOCP
@@ -66,7 +61,7 @@ namespace DC {
 					using size_t = DC::size_t;
 
 				public:
-					IOCPAllocator(size_t size) :m_list(size) {}
+					IOCPAllocator() {}
 
 					IOCPAllocator(const IOCPAllocator&) = delete;
 
@@ -77,13 +72,14 @@ namespace DC {
 				public:
 					template <typename ...ARGS>
 					pointer make(ARGS&& ...args)noexcept {
+						if (isNull(this)) return nullptr;
+						std::lock_guard<std::mutex> lm_mut(m_mut);
 						auto ptr = reinterpret_cast<pointer>(malloc(sizeof(value_type)));
 						if (ptr == NULL)
 							return nullptr;
 
 						try {
 							new(ptr) value_type(std::forward<ARGS>(args)...);
-							std::lock_guard<std::mutex> lm_mut(m_mut);
 							m_list.push_back(ptr);
 						}
 						catch (...) {
@@ -117,7 +113,12 @@ namespace DC {
 						catch (...) {}
 					}
 
+					std::vector<pointer>& get_list() {
+						return m_list;
+					}
+
 					void remove(pointer ptr) {
+						if (isNull(ptr)) return;
 						std::lock_guard<std::mutex> lm_mut(m_mut);
 
 						auto fres = std::find_if(m_list.begin(), m_list.end(), [&ptr](const pointer& it) {
@@ -128,9 +129,31 @@ namespace DC {
 						destory(*fres);
 						DC::vector_fast_erase_no_return(m_list, fres);
 					}
+					
+					template <typename iter_type>
+					auto remove(pointer ptr, iter_type& inputiter)->decltype(this->get_list().begin()) {
+						if (inputiter == this->get_list().end()) return this->get_list().end();
+						if (isNull(ptr)) return inputiter + 1;						
+						//std::lock_guard<std::mutex> lm_mut(m_mut);
+
+						auto fres = std::find_if(m_list.begin(), m_list.end(), [&ptr](const pointer& it) {
+							return ptr == it;
+						});
+						if (fres == m_list.end()) return inputiter + 1;
+
+						destory(*fres);
+						return DC::vector_fast_erase(m_list, fres);
+						//m_list.shrink_to_fit();
+					}
 
 					void clear()noexcept {
-						m_list.reserve(0);
+						std::lock_guard<std::mutex> lock_m_mut(m_mut);
+
+						for (const auto& p : m_list)
+							this->destory(p);
+
+						m_list.clear();
+						m_list.shrink_to_fit();
 					}
 
 					bool empty()const {
@@ -143,12 +166,12 @@ namespace DC {
 						free(ptr);
 					}
 
-					std::vector<pointer>& get_list() {
-						return m_list;
-					}
-
 					std::mutex& get_mut() {
 						return m_mut;
+					}
+
+					inline void reserve(const DC::size_t& _Size) {
+						m_list.reserve(_Size);
 					}
 
 				private:
@@ -156,10 +179,12 @@ namespace DC {
 					std::mutex m_mut;
 				};
 
+				class SocketContext;
+
 				struct IOContext {
 					OVERLAPPED m_overlapped;
-					OperationType m_type;
-					WSABUF m_wsabuf;
+					OperationType m_type;					
+					WSABUF m_wsabuf;					
 					DC::WinSock::Socket m_socket;
 
 					IOContext(const DC::size_t& _Buffer_Size) :m_overlapped{ 0 }, m_type(OperationType::NOSET), m_wsabuf{ 0 } {
@@ -209,7 +234,7 @@ namespace DC {
 
 				class SocketContext {
 				public:
-					SocketContext() :m_IOContextPool(0), m_socket(INVALID_SOCKET), m_removeRightnow(false) {
+					SocketContext() : m_socket(INVALID_SOCKET) {
 						memset(&m_clientAddress, 0, sizeof(m_clientAddress));
 					}
 
@@ -217,6 +242,7 @@ namespace DC {
 
 					~SocketContext() {
 						if (isNull(this)) return;
+						//std::unique_ptr<std::mutex> lock(this->m)
 						close_socket();
 						this->m_IOContextPool.clear();
 					}
@@ -244,23 +270,11 @@ namespace DC {
 							DC::WinSock::Close(m_socket);
 						}
 					}
-
-					DC::timer get_timer()const {
-						return m_timer;
-					}
-
+					
 					inline bool check_socket()const {
 						return m_socket != INVALID_SOCKET;
 					}
-
-					inline void set_removeRightnow(bool _Val)noexcept {
-						m_removeRightnow.store(std::memory_order::memory_order_release);
-					}
-
-					inline bool get_removeRightnow()const noexcept {
-						return m_removeRightnow.load(std::memory_order::memory_order_acquire);
-					}
-
+					
 				public:
 					template <typename ...ARGS>
 					inline IOContext* make_IOContext(ARGS&& ...args) {
@@ -279,10 +293,8 @@ namespace DC {
 					}
 
 				private:
-					std::atomic<bool> m_removeRightnow;
 					DC::WinSock::Socket m_socket;
 					DC::WinSock::Address m_clientAddress;
-					DC::timer m_timer;
 					SpinLock m_socket_lock;
 
 					IOCPAllocator<IOContext> m_IOContextPool;
@@ -367,10 +379,12 @@ namespace DC {
 					if (0 != PostQueuedCompletionStatus(IOCP, 0, reinterpret_cast<ULONG_PTR>(IOptr), &IOptr->m_overlapped)) return true;
 					return false;
 				}
-
+				
 			}
 
 			using reply_type = std::function<bool(const std::string&)>;
+
+			using status_type = IOCPSpace::ServerStatus;
 
 			template <typename OnAcceptCallbackType, typename OnRecvCallbackType, typename OnSendCallbackType, typename OnExceptCallbackType>
 			class Server final {
@@ -380,15 +394,20 @@ namespace DC {
 					const OnRecvCallbackType& onrecvcallback,
 					const OnSendCallbackType& onsendcallback,
 					const OnExceptCallbackType& onexceptcallback) :
-					m_iocp(nullptr), m_pscPool(0), m_io_tp(nullptr), m_usercode_tp(nullptr),
-					m_io_tp_threadnumber(worker_threadnumber + 1), m_usercode_tp_threadnumber(usercode_threadnumber),
+					m_iocp(nullptr), m_io_tp(nullptr), m_usercode_tp(nullptr),
+					m_io_tp_threadnumber(worker_threadnumber), m_usercode_tp_threadnumber(usercode_threadnumber),
 					m_listenAddress(DC::WinSock::MakeAddr(listenip, listenport)),
-					m_recvbuffer_length(1024), m_client_alive_time(15000), m_cleaner_sleep_time(4000), m_cleaner_max_block_time(2000),
+					m_recvbuffer_length(1024),
 					m_onAcceptCallback(onacceptcallback),
 					m_onRecvCallback(onrecvcallback),
 					m_onSendCallback(onsendcallback),
-					m_onExceptCallback(onexceptcallback) {
+					m_onExceptCallback(onexceptcallback),
+					m_status(IOCPSpace::STOP) {
 					this->get_wsa_extension_function();
+
+					start_tp();
+					if (!check_tp())
+						throw DC::Exception("Server constructor", "can not create threadpool");
 				}
 
 				Server(const Server&) = delete;
@@ -397,49 +416,45 @@ namespace DC {
 
 				~Server() {
 					stop();
+					stop_tp();
 				}
 
 			public:
-				bool start(const DC::size_t& _Post_Accept_Number) {
-					stop();
-
-					start_tp();
-					if (!check_tp()) 
-						return false;
+				void start(const DC::size_t& _Post_Accept_Number) {
+					if (m_status != status_type::STOP) return;
 					
 					m_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 					if (isNull(m_iocp)) {
 						stop_tp();
 						m_iocp = nullptr;
-						return false;
+						return;
 					}
 
-					///*
 					if (!start_listen(_Post_Accept_Number)) {
 						stop_tp();
 						CloseHandle(m_iocp);
 						m_iocp = nullptr;
 						m_pscPool.clear();
-						return false;
+						return;
 					}
-					//*/
 
-					for (auto i = 0; i < m_io_tp_threadnumber - 1; i++)
+					for (auto i = 0; i < m_io_tp_threadnumber; i++)
 						m_io_tp->async(&Server::worker, this);
-
-					stopFlag.store(false, std::memory_order::memory_order_release);
-					m_io_tp->async(&Server::cleaner, this);
 
 					m_io_tp->start();
 					m_usercode_tp->start();
 
-					return true;
+					m_status = IOCPSpace::ServerStatus::RUNNING;
 				}
 
 				void stop() {
+					if (m_status != status_type::RUNNING) return;
+					m_status = IOCPSpace::ServerStatus::INVALID;
+
 					stop_listen();
-					
-					IOCPSpace::IOCPAllocator<IOCPSpace::IOContext> ExitIO(m_io_tp_threadnumber);
+
+					IOCPSpace::IOCPAllocator<IOCPSpace::IOContext> ExitIO;
+					ExitIO.reserve(m_io_tp_threadnumber);
 					for (auto i = 0; i < m_io_tp_threadnumber; i++)
 						IOCPSpace::PostExit(m_iocp, ExitIO.make(0));
 
@@ -447,30 +462,25 @@ namespace DC {
 						CloseHandle(m_iocp);
 						m_iocp = nullptr;
 					}
-
-					stopFlag.store(true, std::memory_order::memory_order_release);
-					this->cleanerCV.notify_one();
-					stop_tp();
-
+					
 					m_pscPool.clear();
 					m_listenSocket.clear_IOContext();
+
+					m_status = IOCPSpace::ServerStatus::STOP;
+				}
+
+				inline void restart(const DC::size_t& _Post_Accept_Number) {
+					this->stop();
+					this->start(_Post_Accept_Number);
 				}
 
 			public:
-				inline void set_client_alive_time(const DC::size_t& _Time) {
-					m_client_alive_time = _Time;
-				}
-
-				inline void set_cleaner_sleep_time(const std::chrono::milliseconds& _Time) {
-					m_cleaner_sleep_time = _Time;
-				}
-
-				inline void set_cleaner_max_block_time(const DC::size_t& _Time) {
-					m_cleaner_max_block_time = _Time;
-				}
-
 				inline void set_recv_buffer_size(const DC::size_t& _Size) {
 					m_recvbuffer_length = _Size;
+				}
+
+				inline IOCPSpace::ServerStatus get_status()const noexcept {
+					return m_status;
 				}
 
 			private:
@@ -512,58 +522,6 @@ namespace DC {
 						}break;
 						case IOCPSpace::OperationType::NOSET: {
 						}break;
-						}
-						//检查是否超时，是则关闭连接
-						if (!isNull(PSC)) {
-							if (PSC->get_timer().getms() >= m_client_alive_time) {
-								PSC->set_removeRightnow(true);
-								PSC->close_socket();
-							}
-						}
-					}
-				}
-
-				void cleaner() {
-					DC::size_t& block_time = m_cleaner_max_block_time, client_alive_time = m_client_alive_time;
-					DC::timer timer;
-					std::chrono::milliseconds templimits = m_cleaner_sleep_time;
-
-					while (true) {
-						timer.reset();
-						timer.start();
-						std::unique_lock<std::mutex> lock(cleanerMut);
-						while (true) {
-							if (cleanerCV.wait_for(lock, templimits) == std::cv_status::timeout)
-								if (stopFlag.load(std::memory_order_acquire) == true)
-									return;//退出信号
-								else
-									break;//时间到，开始工作
-
-							timer.stop();
-
-							if (stopFlag.load(std::memory_order_acquire) == true)
-								return;//退出信号
-
-							if (std::chrono::milliseconds(timer.getms()) >= templimits)
-								break;//睡过头了
-
-									  //假唤醒，计算剩余时间开始新一轮等待
-							templimits = templimits - std::chrono::milliseconds(timer.getms());
-							timer.reset();
-							timer.start();
-						}
-
-						std::unique_lock<std::mutex> allocator_lock(m_pscPool.get_mut());
-						//debug
-						std::cout << "cleaner!\n";
-						timer.reset();
-						timer.start();
-						for (auto it(m_pscPool.get_list().begin()); it != m_pscPool.get_list().end(); it++) {
-							if (timer.getms() >= m_cleaner_max_block_time) break;
-							if ((*it)->get_timer().getms() >= m_client_alive_time) {
-								m_pscPool.remove(*it);
-								continue;
-							}
 						}
 					}
 				}
@@ -683,6 +641,17 @@ namespace DC {
 					Socketptr->remove_IOContext(IOptr);
 				}
 
+				void do_free(IOCPSpace::IOContext* IOptr) {
+					if (isNull(IOptr)) return;
+					//if (isNull(IOptr->freethis)) return;
+
+					//IOptr->freethis->close_socket();
+					//CancelIoEx(reinterpret_cast<HANDLE>(IOptr->freethis->get_socket()), 0);
+
+					//this->m_pscPool.remove(IOptr->freethis);
+					//IOptr->freethis = nullptr;
+				}
+
 				inline void start_tp()noexcept {
 					m_io_tp = new(std::nothrow) DC::ThreadPool(m_io_tp_threadnumber);
 					m_usercode_tp = new(std::nothrow) DC::ThreadPool(m_usercode_tp_threadnumber);
@@ -726,24 +695,19 @@ namespace DC {
 				IOCPSpace::SocketContext m_listenSocket;
 				DC::ThreadPool *m_io_tp, *m_usercode_tp;
 
-				//这几个用于通知cleaner返回
-				std::condition_variable cleanerCV;
-				std::mutex cleanerMut;
-				std::atomic<bool> stopFlag;
-
 				DC::WinSock::Address m_listenAddress;
 
 				IOCPSpace::IOCPAllocator<IOCPSpace::SocketContext> m_pscPool;
 
 				const DC::size_t m_io_tp_threadnumber, m_usercode_tp_threadnumber;
-				DC::size_t m_recvbuffer_length, m_client_alive_time, m_cleaner_max_block_time;//default recvbuffer length==1024, default clientalivetime==15000, default cleanerwakeuptime==4000,
-				std::chrono::milliseconds m_cleaner_sleep_time;
-				//default cleaner_max_block_time==2000
+				DC::size_t m_recvbuffer_length;//default recvbuffer length==1024
 
 				OnAcceptCallbackType m_onAcceptCallback;//ANY(const std::string& clientip)
 				OnRecvCallbackType m_onRecvCallback;//ANY(const std::string& recvstr, const std::string& clientip, const DC::Web::IOCP::reply_type& reply)
 				OnSendCallbackType m_onSendCallback;//ANY(const std::string& sendstr)
 				OnExceptCallbackType m_onExceptCallback;//ANY(const DC::Exception& ex)
+
+				IOCPSpace::ServerStatus m_status;
 			};
 
 		}
