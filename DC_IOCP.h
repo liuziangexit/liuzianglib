@@ -11,8 +11,8 @@
 #include "DC_timer.h"
 #include <vector>
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V21
-//20170726
+//Version 2.4.21V22
+//20170730
 
 namespace DC {
 
@@ -72,14 +72,14 @@ namespace DC {
 				public:
 					template <typename ...ARGS>
 					pointer make(ARGS&& ...args)noexcept {
-						if (isNull(this)) return nullptr;
-						std::lock_guard<std::mutex> lm_mut(m_mut);
+						if (isNull(this)) return nullptr;						
 						auto ptr = reinterpret_cast<pointer>(malloc(sizeof(value_type)));
 						if (ptr == NULL)
 							return nullptr;
 
 						try {
 							new(ptr) value_type(std::forward<ARGS>(args)...);
+							std::lock_guard<std::mutex> lm_mut(m_mut);
 							m_list.push_back(ptr);
 						}
 						catch (...) {
