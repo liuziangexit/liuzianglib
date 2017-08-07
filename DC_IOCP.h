@@ -11,8 +11,8 @@
 #include "DC_timer.h"
 #include <vector>
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V22
-//20170730
+//Version 2.4.21V23
+//20170807
 
 namespace DC {
 
@@ -126,7 +126,7 @@ namespace DC {
 						});
 						if (fres == m_list.end()) return;
 
-						destory(*fres);
+						destroy(*fres);
 						DC::vector_fast_erase_no_return(m_list, fres);
 					}
 					
@@ -141,7 +141,7 @@ namespace DC {
 						});
 						if (fres == m_list.end()) return inputiter + 1;
 
-						destory(*fres);
+						destroy(*fres);
 						return DC::vector_fast_erase(m_list, fres);
 						//m_list.shrink_to_fit();
 					}
@@ -150,7 +150,7 @@ namespace DC {
 						std::lock_guard<std::mutex> lock_m_mut(m_mut);
 
 						for (const auto& p : m_list)
-							this->destory(p);
+							this->destroy(p);
 
 						m_list.clear();
 						m_list.shrink_to_fit();
@@ -160,7 +160,7 @@ namespace DC {
 						return m_list.empty();
 					}
 
-					inline void destory(void* ptr) {
+					inline void destroy(void* ptr) {
 						if (isNull(ptr)) return;
 						reinterpret_cast<pointer>(ptr)->~value_type();
 						free(ptr);
@@ -639,17 +639,6 @@ namespace DC {
 						invoke_usercode(m_onSendCallback, std::string(IOptr->m_wsabuf.buf, length), DC::WinSock::GetAddrString(Socketptr->get_client_address()));
 
 					Socketptr->remove_IOContext(IOptr);
-				}
-
-				void do_free(IOCPSpace::IOContext* IOptr) {
-					if (isNull(IOptr)) return;
-					//if (isNull(IOptr->freethis)) return;
-
-					//IOptr->freethis->close_socket();
-					//CancelIoEx(reinterpret_cast<HANDLE>(IOptr->freethis->get_socket()), 0);
-
-					//this->m_pscPool.remove(IOptr->freethis);
-					//IOptr->freethis = nullptr;
 				}
 
 				inline void start_tp()noexcept {
