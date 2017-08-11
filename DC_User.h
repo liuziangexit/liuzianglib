@@ -5,10 +5,10 @@
 #include "DC_STR.h"
 #include "DC_MySQL.h"
 #include "DC_Exception.h"
-#include "md5.cpp"
+#include "DC_MD5.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.2V36
-//20170517
+//Version 2.4.21V24
+//20170811
 
 namespace DC {
 	
@@ -169,12 +169,8 @@ namespace DC {
 
 		private:
 			std::string GetHash(std::string str) {
-				md5.reset();
-				md5.update(str);
-				std::string temp = md5.toString(), temp2;
-				md5.reset();
-				md5.update(temp);
-				temp2 = md5.toString();
+				std::string temp = md5.toString(str), temp2;
+				temp2 = md5.toString(temp);
 				temp2.resize(8);
 				return temp + temp2;
 			}

@@ -1,16 +1,16 @@
 #pragma once
 #ifndef liuzianglib_type
 #define liuzianglib_type
-#include <iostream>
-//Version 2.4.21V14
-//20170721
-
+#include <stdint.h>
+//Version 2.4.21V24
+//20170811
 //This file only support MSVC
 
 namespace DC {
 
 	using byte_t = unsigned char;
 	using size_t = unsigned int;
+	using ulong_t = unsigned long;
 
 #ifdef _WIN64
 
