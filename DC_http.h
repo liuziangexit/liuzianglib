@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.21V8
-//20170703
+//Version 2.4.21V25
+//20170812
 
 namespace DC {
 
@@ -154,6 +154,8 @@ namespace DC {
 			}
 
 			class headers final {
+				friend class request;
+				friend class response;
 			public:
 				headers() = default;
 
@@ -192,18 +194,18 @@ namespace DC {
 					m_data.emplace_back(input);
 				}
 
-				inline bool hasKey(const std::string& input)const noexcept {
+				inline bool has_key(const std::string& input)const noexcept {
 					return std::find_if(m_data.begin(), m_data.end(), std::bind(httpSpace::vec_header_find_func, std::placeholders::_1, input)) != m_data.end();
 				}
 
-				inline httpSpace::header getHeader(const std::string& key)const {//如果有多个匹配的key，返回排在最前的
+				inline httpSpace::header get_header(const std::string& key)const {//如果有多个匹配的key，返回排在最前的
 					auto it = std::find_if(m_data.begin(), m_data.end(), std::bind(httpSpace::vec_header_find_func, std::placeholders::_1, key));
 					if (it == m_data.end()) throw DC::DC_ERROR("get", "key not found");
 					return *it;
 				}
 
-				inline std::string getValue(const std::string& key)const {
-					return getHeader(key).GetValue();
+				inline std::string get_value(const std::string& key)const {
+					return get_header(key).GetValue();
 				}
 
 				inline void drop(const std::string& key) {//如果有多个header的key都是，那么把它们全部删掉
@@ -222,6 +224,7 @@ namespace DC {
 					return m_data.empty();
 				}
 
+			private:
 				std::string toStr()const {
 					std::string returnvalue;
 					for (const auto& p : m_data) {
@@ -241,6 +244,8 @@ namespace DC {
 			namespace httpSpace {
 
 				class base {
+					 template<typename titleType, typename headersType, typename bodyType>
+					 friend void Derived_construct(base& object, titleType&& inputtitle, headersType&& inputheaders, bodyType&& inputbody);
 				public:
 					base() = default;
 
@@ -261,30 +266,31 @@ namespace DC {
 					}
 
 				public:
-					inline std::string HTTPVersion() { return m_title.version; }
+					inline std::string get_version() { return m_title.version; }
 
-					inline void setHTTPVersion(const double& input) { m_title.version = DC::STR::toString(input); }
+					inline void set_version(const double& input) { m_title.version = DC::STR::toString(input); }
 
-					inline void setHTTPVersion(const std::string& input) { m_title.version = input; }
-
-					inline httpSpace::title& Title() {
-						return m_title;
-					}
-
-					inline http::headers& Headers() {
+					inline void set_version(const std::string& input) { m_title.version = input; }
+					
+					inline http::headers& headers() {
 						return m_headers;
 					}
 
-					inline http::body& Body() {
+					inline http::body& body() {
 						return m_body;
 					}
 
 					virtual std::string toStr()const = 0;
 
+				private:
+					inline httpSpace::title& title() {
+						return m_title;
+					}
+
 				protected:
 					DC::Web::http::httpSpace::title m_title;
-					headers m_headers;
-					body m_body;
+					DC::Web::http::headers m_headers;
+					DC::Web::http::body m_body;
 				};
 
 				template<typename titleType, typename headersType, typename bodyType>
@@ -292,9 +298,9 @@ namespace DC {
 					static_assert(std::is_same<std::decay_t<titleType>, title>::value, "first arg's type should be title");
 					static_assert(std::is_same<std::decay_t<headersType>, headers>::value, "second arg's type should be headers");
 					static_assert(std::is_same<std::decay_t<bodyType>, body>::value, "third arg's type should be body");
-					object.Title() = std::forward<title>(inputtitle);
-					object.Headers() = std::forward<headers>(inputheaders);
-					object.Body() = std::forward<body>(inputbody);
+					object.title() = std::forward<title>(inputtitle);
+					object.headers() = std::forward<headers>(inputheaders);
+					object.body() = std::forward<body>(inputbody);
 				}
 
 				template<typename T>
@@ -351,12 +357,22 @@ namespace DC {
 					return rv;
 				}
 
+				inline httpSpace::title Set_Version_Statuscode(const double& inputVersion, const http::status_code& inputStatusCode) {
+					return httpSpace::title(inputVersion, inputStatusCode);
+				}
+
+				inline httpSpace::title Set_Version_Method_URI(const double& inputVersion, const http::method& inputmethod, const std::string& inputURI) {
+					return httpSpace::title(inputVersion, inputmethod, inputURI);
+				}
+
 			}
 
 			class request final :public httpSpace::base {
+				friend request request_deserialization(const std::string& input);
 			public:
 				request() = default;
 
+			private:
 				template<typename ...argsType>
 				request(argsType ...args) {
 					httpSpace::Derived_construct(static_cast<httpSpace::base&>(*this), std::forward<argsType>(args)...);
@@ -369,19 +385,29 @@ namespace DC {
 					else return temp + httpSpace::emptyline + m_body;
 				}
 
-				inline method& Method() {
+				inline method get_method() {
 					return m_title.method();
 				}
 
-				inline std::string& URI() {
+				inline void set_method(const method& med) {
+					m_title.method() = med;
+				}
+
+				inline std::string get_uri() {
 					return m_title.URI();
+				}
+
+				inline std::string set_uri(const std::string& u) {
+					m_title.URI() = u;
 				}
 			};
 
 			class response final :public httpSpace::base {
+				friend response response_deserialization(const std::string& input);
 			public:
 				response() = default;
 
+			private:
 				template<typename ...argsType>
 				response(argsType ...args) {
 					httpSpace::Derived_construct(static_cast<httpSpace::base&>(*this), std::forward<argsType>(args)...);
@@ -394,18 +420,18 @@ namespace DC {
 					else return temp + httpSpace::emptyline + m_body;
 				}
 
-				inline void setStatusCode(const http::status_code& input) {
+				inline void set_status_code(const http::status_code& input) {
 					m_title.StatusCode() = DC::STR::toString(input);
 					m_title.StatusCodeDes() = httpSpace::getSC(input);
 				}
 
-				inline http::status_code StatusCode() {
+				inline http::status_code get_status_code() {
 					return DC::STR::toType<http::status_code>(m_title.StatusCode());
 				}
 			};
 
 			template<typename ...argsType>
-			httpSpace::header addHeader(argsType&& ...args) {
+			httpSpace::header add_header(argsType&& ...args) {
 				return httpSpace::header(std::forward<argsType>(args)...);
 			}
 
@@ -468,54 +494,6 @@ namespace DC {
 				catch (...) {}
 
 				return response(httpSpace::title(httpSpace::title_deserialization<response>(titleraw)), httpSpace::headers_deserialization(headersraw), bodyraw);
-			}
-
-			inline httpSpace::title Set_Version_Statuscode(const double& inputVersion, const http::status_code& inputStatusCode) {
-				return httpSpace::title(inputVersion, inputStatusCode);
-			}
-
-			inline httpSpace::title Set_Version_Method_URI(const double& inputVersion, const http::method& inputmethod, const std::string& inputURI) {
-				return httpSpace::title(inputVersion, inputmethod, inputURI);
-			}
-
-			inline std::string get(const httpSpace::base& input, const std::string& key) {
-				return const_cast<httpSpace::base&>(input).Headers().getValue(key);
-			}
-
-			inline bool has_body(const httpSpace::base& input)noexcept {
-				return !const_cast<httpSpace::base&>(input).Body().empty();
-			}
-
-			inline bool has_TransferEncoding(const httpSpace::base& input)noexcept {
-				return const_cast<httpSpace::base&>(input).Headers().hasKey(httpSpace::Key_TransferEncoding);
-			}
-
-			inline std::string get_TransferEncoding(const httpSpace::base& input) {
-				return get(input, httpSpace::Key_TransferEncoding);
-			}
-
-			inline bool has_ContentLength(const httpSpace::base& input)noexcept {
-				return const_cast<httpSpace::base&>(input).Headers().hasKey(httpSpace::Key_ContentLength);
-			}
-
-			inline std::string get_ContentLength(const httpSpace::base& input) {
-				return get(input, httpSpace::Key_ContentLength);
-			}
-
-			inline std::string get_URL(const std::string& uri) {
-				auto pos = uri.find_first_of('?');
-				if (pos == std::string::npos || uri.empty()) return uri;
-				return DC::STR::getSub(uri, -1, pos);
-			}
-
-			inline std::string get_Parameter(const std::string& uri) {
-				auto pos = uri.find_first_of('?');
-				if (pos == std::string::npos || uri.empty()) throw DC::Exception("DC::http::get_Parameter", "? not found");
-				return DC::STR::getSub(uri, pos, uri.size());
-			}
-
-			inline void add_ContentLength(httpSpace::base& input) {
-				input.Headers().add(addHeader("Content-Length", DC::STR::toString(input.Body().size())));
 			}
 
 		}
