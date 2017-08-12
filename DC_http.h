@@ -7,7 +7,7 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.21V25
+//Version 2.4.21V26
 //20170812
 
 namespace DC {
@@ -397,7 +397,7 @@ namespace DC {
 					return m_title.URI();
 				}
 
-				inline std::string set_uri(const std::string& u) {
+				inline void set_uri(const std::string& u) {
 					m_title.URI() = u;
 				}
 			};
