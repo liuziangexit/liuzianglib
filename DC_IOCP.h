@@ -11,8 +11,8 @@
 #include "DC_timer.h"
 #include <vector>
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V23
-//20170807
+//Version 2.4.21V27
+//20170813
 
 namespace DC {
 
@@ -422,6 +422,11 @@ namespace DC {
 			public:
 				void start(const DC::size_t& _Post_Accept_Number) {
 					if (m_status != status_type::STOP) return;
+
+					if (!check_tp())
+						start_tp();
+					if (!check_tp())
+						throw DC::Exception("Server::start", "can not create threadpool");
 					
 					m_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 					if (isNull(m_iocp)) {
