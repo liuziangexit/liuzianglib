@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.21V26
-//20170812
+//Version 2.4.21V28
+//20170816
 
 namespace DC {
 
@@ -185,9 +185,8 @@ namespace DC {
 				void add(T&& first, argsType&& ...args) {//ÓÃ·¨:add(addHeader("name", "value"), addHeader("name2", "value2"), addHeader("name3", "value3")......);
 					auto args_value = DC::GetArgs(std::forward<argsType>(args)...);
 					m_data.emplace_back(std::forward<T>(first));
-					for (const auto& p : args_value) {
+					for (auto&& p : args_value)
 						m_data.push_back(std::move(p.get<httpSpace::header>()));
-					}
 				}
 
 				inline void add(const std::string& input) {
