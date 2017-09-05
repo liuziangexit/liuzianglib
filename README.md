@@ -18,4 +18,4 @@
 </p>
 <h3>其它</h3>
 <p>liuzianglib 仅在 Microsoft Visual Studio 2015/2017 中编译通过。</p>
-<p><a href="https://liuziangexit.com/liuzianglib">liuzianglib</a> 由 <a href="https://liuziangexit.com">liuziangexit</a> 维护并遵循 GPL 协议开放源代码。</p>
+<p><a href="https://liuziangexit.com/liuzianglib">liuzianglib</a> 由 <a href="https://liuziangexit.com">liuziangexit</a> 维护并遵循 MIT 协议开放源代码。</p>
