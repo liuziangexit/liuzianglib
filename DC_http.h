@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.21V28
-//20170816
+//Version 2.4.21V29
+//20170907
 
 namespace DC {
 
@@ -160,12 +160,11 @@ namespace DC {
 				headers() = default;
 
 				template<typename T, typename ...argsType>
-				headers(T&& first, argsType&& ...args) {//用法:http_header(addHeader("name", "value"), addHeader("name2", "value2"), addHeader("name3", "value3")......);
+				headers(T&& first, argsType&& ...args) {//用法:add(addHeader("name", "value"), addHeader("name2", "value2"), addHeader("name3", "value3")......);
 					auto args_value = DC::GetArgs(std::forward<argsType>(args)...);
-					m_data.push_back(std::move(first));
-					for (const auto& p : args_value) {
-						m_data.push_back(std::move(p.get<httpSpace::header>()));
-					}
+					m_data.push_back(first);
+					for (const auto& p : args_value)
+						m_data.push_back(p.get<httpSpace::header>());
 				}
 
 				headers(const headers&) = default;
@@ -184,9 +183,9 @@ namespace DC {
 				template<typename T, typename ...argsType, class = typename std::enable_if_t<!std::is_same<std::decay_t<T>, std::string>::value>>
 				void add(T&& first, argsType&& ...args) {//用法:add(addHeader("name", "value"), addHeader("name2", "value2"), addHeader("name3", "value3")......);
 					auto args_value = DC::GetArgs(std::forward<argsType>(args)...);
-					m_data.emplace_back(std::forward<T>(first));
-					for (auto&& p : args_value)
-						m_data.push_back(std::move(p.get<httpSpace::header>()));
+					m_data.push_back(first);
+					for (const auto& p : args_value)
+						m_data.push_back(p.get<httpSpace::header>());
 				}
 
 				inline void add(const std::string& input) {
@@ -257,15 +256,10 @@ namespace DC {
 				public:
 					base& operator=(const base&) = default;
 
-					base& operator=(base&& input) {
-						m_title = std::move(input.m_title);
-						m_headers = std::move(input.m_headers);
-						m_body = std::move(input.m_body);
-						return *this;
-					}
+					base& operator=(base&&) = default;
 
 				public:
-					inline std::string get_version() { return m_title.version; }
+					inline std::string get_version()const { return m_title.version; }
 
 					inline void set_version(const double& input) { m_title.version = DC::STR::toString(input); }
 
@@ -287,7 +281,7 @@ namespace DC {
 					}
 
 				protected:
-					DC::Web::http::httpSpace::title m_title;
+					mutable DC::Web::http::httpSpace::title m_title;
 					DC::Web::http::headers m_headers;
 					DC::Web::http::body m_body;
 				};
@@ -384,7 +378,7 @@ namespace DC {
 					else return temp + httpSpace::emptyline + m_body;
 				}
 
-				inline method get_method() {
+				inline method get_method()const {
 					return m_title.method();
 				}
 
@@ -392,7 +386,7 @@ namespace DC {
 					m_title.method() = med;
 				}
 
-				inline std::string get_uri() {
+				inline std::string get_uri()const {
 					return m_title.URI();
 				}
 
@@ -424,7 +418,7 @@ namespace DC {
 					m_title.StatusCodeDes() = httpSpace::getSC(input);
 				}
 
-				inline http::status_code get_status_code() {
+				inline http::status_code get_status_code()const {
 					return DC::STR::toType<http::status_code>(m_title.StatusCode());
 				}
 			};
