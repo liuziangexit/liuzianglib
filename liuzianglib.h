@@ -5,14 +5,12 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.21V30
+//Version 2.4.21V31
 //20170914
-
-#define GET_FIRST_PARAMETERS 0//适用于GetCommandLineParameters
 
 namespace DC {
 
-	typedef std::queue<std::string> PARS_V;
+	typedef std::vector<std::string> PARS_V;
 	typedef std::vector<DC::Any> ARGS_V;
 
 	static inline int32_t randomer(int32_t s, int32_t b) {//生成介于s和b之间的随机数(包括s与b)
@@ -36,38 +34,14 @@ namespace DC {
 		b = std::move(TEMP);
 	}
 
-	template<typename ...ARGS>
-	void GetCommandLineParameters(const char* argv[], ARGS& ...args) {//开始
-		PARS_V pars;
-		for (std::size_t i = 1; true; i++) {
-			if (argv[i] != NULL) pars.push(argv[i]);
-			else break;
-		}
-		GetCommandLineParameters(pars, args...);
-	}
+	PARS_V GetCommandLineParameters(int argc, char *argv[]) {
+		PARS_V returnthis;
+		returnthis.reserve(argc);
 
-	template<typename ...ARGS>
-	void GetCommandLineParameters(const int32_t& flag, const char* argv[], ARGS& ...args) {//有选项的开始
-		PARS_V pars;
-		for (std::size_t i = flag; true; i++) {
-			if (argv[i] != NULL) pars.push(argv[i]);
-			else break;
-		}
-		GetCommandLineParameters(pars, args...);
-	}
+		for (PARS_V::size_type i = 0; i < argc; i++)
+			returnthis.emplace_back(argv[i]);
 
-	template<typename T, typename ...ARGS>
-	void GetCommandLineParameters(PARS_V& pars, T& item, ARGS& ...args) {//递归中
-		if (!pars.empty()) {
-			item = pars.front();
-			pars.pop();
-		}
-		GetCommandLineParameters(pars, args...);
-	}
-
-	template<typename T>
-	void GetCommandLineParameters(PARS_V& pars, T& item) {//终止条件
-		if (!pars.empty()) item = pars.front();
+		return returnthis;
 	}
 
 	inline ARGS_V GetArgs() {//无参数
