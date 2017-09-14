@@ -8,8 +8,8 @@
 #include <sstream>
 #include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.21V14
-//20170721
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 

@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.2V42
-//20170602
+//Version 2.4.21V30
+//20170914
 
 #define GET_FIRST_PARAMETERS 0//  ”√”⁄GetCommandLineParameters
 

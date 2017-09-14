@@ -3,8 +3,8 @@
 #define liuzianglib_MySQL
 #include <vector>
 #include <mysql.h>
-//Version 2.4.2V8
-//20170413
+//Version 2.4.21V30
+//20170914
 //注意:DC_WinSock.h必须先于DC_MySQL.h包含
 
 namespace DC {

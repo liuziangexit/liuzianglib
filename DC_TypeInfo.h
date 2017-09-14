@@ -2,8 +2,8 @@
 #ifndef liuzianglib_TypeInfo
 #define liuzianglib_TypeInfo
 #include <iostream>
-//Version 2.4.2
-//20170330
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 

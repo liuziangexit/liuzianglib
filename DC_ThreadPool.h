@@ -6,8 +6,8 @@
 #include <mutex>
 #include <future>
 #include <queue>
-//Version 2.4.2V44
-//20170604
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 

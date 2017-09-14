@@ -2,8 +2,8 @@
 #ifndef liuzianglib_var
 #define liuzianglib_var
 #include "DC_STR.h"
-//Version 2.4.2
-//20170330
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 

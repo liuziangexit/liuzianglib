@@ -11,8 +11,8 @@
 #include "DC_timer.h"
 #include <vector>
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V27
-//20170813
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 

@@ -7,8 +7,8 @@
 #include "DC_Exception.h"
 #include "DC_MD5.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V24
-//20170811
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 	

@@ -9,8 +9,8 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.21V4
-//20170608
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 

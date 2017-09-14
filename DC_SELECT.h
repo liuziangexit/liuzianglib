@@ -8,8 +8,8 @@
 #include "liuzianglib.h"
 #include "DC_WinSock.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V6
-//20170623
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 

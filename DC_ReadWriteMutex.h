@@ -3,8 +3,8 @@
 #define liuzianglib_RWMutex
 #include <mutex>
 #include <condition_variable>
-//Version 2.4.2V44
-//20170604
+//Version 2.4.21V30
+//20170914
 //注意，locker系列不是线程安全
 
 namespace DC {

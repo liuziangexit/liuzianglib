@@ -7,8 +7,8 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_Exception.h"
-//Version 2.4.21V12
-//20170714
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 

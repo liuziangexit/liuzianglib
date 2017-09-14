@@ -4,8 +4,8 @@
 #include <string>
 #include <memory>
 #include "DC_Exception.h"
-//Version 2.4.21V7
-//20170703
+//Version 2.4.21V30
+//20170914
 
 #define ERROR_CANTOPENFILE DC::DC_ERROR(filename, "CAN NOT OPEN FILE")
 #define ERROR_CANTGETSIZE DC::DC_ERROR(filename, "CAN NOT GET FILE SIZE")

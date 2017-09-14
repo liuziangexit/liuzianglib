@@ -2,8 +2,8 @@
 #ifndef liuzianglib_type
 #define liuzianglib_type
 #include <stdint.h>
-//Version 2.4.21V24
-//20170811
+//Version 2.4.21V30
+//20170914
 //This file only support MSVC
 
 namespace DC {

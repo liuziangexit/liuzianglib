@@ -3,8 +3,8 @@
 #define liuzianglib_ERROR
 #include <string>
 #include <time.h>
-//Version 2.4.2V36
-//20170517
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 

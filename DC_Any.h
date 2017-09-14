@@ -6,8 +6,8 @@
 #include <memory>
 #include <typeindex>
 #include "DC_Exception.h"
-//Version 2.4.2V48
-//20170606
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 	

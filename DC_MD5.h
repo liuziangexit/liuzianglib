@@ -3,8 +3,8 @@
 #define liuzianglib_MD5
 #include "DC_type.h"
 #include <string>
-//Version 2.4.21V28
-//20170816
+//Version 2.4.21V30
+//20170914
 
 #define S11 7
 #define S12 12

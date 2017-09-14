@@ -2,8 +2,8 @@
 #ifndef liuzianglib_timer
 #define liuzianglib_timer
 #include <time.h>
-//Version 2.4.2V19
-//20170421
+//Version 2.4.21V30
+//20170914
 
 namespace DC {
 
