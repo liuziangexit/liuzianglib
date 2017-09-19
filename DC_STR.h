@@ -8,8 +8,8 @@
 #include <sstream>
 #include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.21V30
-//20170914
+//Version 2.4.21V32
+//20170920
 
 namespace DC {
 
@@ -80,42 +80,9 @@ namespace DC {
 				return returnvalue;
 			}
 
-			class ReplaceInfo final {
-			public:
-				ReplaceInfo() :bei_ti_huan_howlong(0) {}
-
-				ReplaceInfo(const ReplaceInfo& input) :whererp(input.whererp), bei_ti_huan_howlong(input.bei_ti_huan_howlong) {}
-
-				ReplaceInfo(ReplaceInfo&& input)noexcept : whererp(std::move(input.whererp)), bei_ti_huan_howlong(input.bei_ti_huan_howlong) {
-					input.bei_ti_huan_howlong = 0;
-				}
-
-			public:
-				template <typename T>
-				inline void setplace(T&& input) {
-					static_assert(std::is_same<std::decay_t<T>, std::decay_t<decltype(whererp)>>::value, "input type doesnt right");
-					whererp = std::forward<T>(input);
-				}
-
-				inline void setsize(const std::size_t& input) {
-					bei_ti_huan_howlong = input;
-				}
-
-				inline const std::vector<std::size_t>& getplace_ref()const {
-					return whererp;
-				}
-
-				inline std::vector<std::size_t>&& moveplace() {
-					return std::move(whererp);
-				}
-
-				inline std::size_t getsize()const {
-					return bei_ti_huan_howlong;
-				}
-
-			private:
-				std::vector<std::size_t> whererp;
-				std::size_t bei_ti_huan_howlong;
+			struct ReplaceInfo final {
+				std::vector<std::size_t> places;
+				std::size_t remove_length = 0;
 			};
 
 			class SetLocal final {
@@ -237,27 +204,27 @@ namespace DC {
 		inline STRSpace::ReplaceInfo find(const std::string& str, const std::string& findstr) {//使用 KMP 字符串匹配算法找到所有存在于 std::string str 中的 std::string find，并返回它们的位置		
 			if (str.empty() || findstr.empty()) return STRSpace::ReplaceInfo();
 			STRSpace::ReplaceInfo rv;
-			rv.setsize(findstr.size());
-			rv.setplace(STRSpace::KMPSearch(findstr.c_str(), str.c_str()));
+			rv.remove_length = findstr.size();
+			rv.places = STRSpace::KMPSearch(findstr.c_str(), str.c_str());
 			return rv;
 		}
 
 		std::string replace(const std::string& str, const STRSpace::ReplaceInfo& info, const std::string& rpword) {//请确保 whererp 中的元素(表示位置的数字)是从小到大有序排列的。
 																												   //不能查找替换循环的字符串，比如查找hh，把hh替换为h，这个不work
-			if (info.getplace_ref().empty() || str.empty()) return str;
-			const std::size_t endsize = str.size() + info.getplace_ref().size()*(rpword.size() - info.getsize());
-			std::vector<std::size_t>::const_iterator wherepit = info.getplace_ref().begin();
+			if (info.places.empty() || str.empty()) return str;
+			const std::size_t endsize = str.size() + info.places.size()*(rpword.size() - info.remove_length);
+			auto wherepit = info.places.begin();
 			std::string TEMP_str;
 			for (std::size_t index = 0; TEMP_str.size() < endsize;) {
-				if (wherepit != info.getplace_ref().end()) {
+				if (wherepit != info.places.end()) {
 					if (index == *wherepit) {
 						TEMP_str += rpword;
-						index += info.getsize();
+						index += info.remove_length;
 						wherepit++;
 						continue;
 					}
 				}
-				TEMP_str += str[index];
+				TEMP_str += str.at(index);
 				index++;
 			}
 			return TEMP_str;
