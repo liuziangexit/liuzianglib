@@ -8,7 +8,7 @@
 #include <sstream>
 #include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.21V32
+//Version 2.4.21V33
 //20170920
 
 namespace DC {
@@ -143,52 +143,6 @@ namespace DC {
 				}
 			}
 
-		}
-
-		std::string insert(const std::string& str, const std::string& input, const std::size_t& wheretoput) {//在 std::string str[wheretoput] 之后插入 std::string input
-																											 //wheretoput非法时抛异常
-																											 //兼容中文
-			auto GetBefore = [&str, &wheretoput] {
-				std::string rv;
-				rv.reserve(wheretoput);
-				for (std::size_t i = 0; i < wheretoput; i++)
-					rv.push_back(str[i]);
-				return rv;
-			};
-			auto GetAfter = [&str, &wheretoput] {
-				std::string rv;
-				rv.reserve(str.size() - wheretoput);
-				for (std::size_t i = wheretoput; i < str.size(); i++)
-					rv.push_back(str[i]);
-				return rv;
-			};
-			if (wheretoput > str.size()) throw DC::DC_ERROR("index illegal", 0);
-			return GetBefore() + input + GetAfter();
-		}
-
-		std::string insertCHS(const std::string& str, const std::string& input, const std::size_t& wheretoput) {//在 std::string str[wheretoput] 之后插入 std::string input
-																												//wheretoput非法时抛异常
-																												//兼容中文
-			std::size_t realput = 0, count_ = 0;
-			std::string before, after;
-			for (std::size_t i = 0; i < str.size(); i++) {
-				if (count_ == wheretoput) { realput = i; }
-				if ((str[i] < 0 || str[i]>127) && (str[i + 1] < 0 || str[i + 1]>127)) { i++; count_++; }
-				else count_++;
-			}
-			if (wheretoput >= count_) {
-				if (wheretoput == count_) return str + input;
-				throw DC::DC_ERROR("index illegal", 0);
-			}
-			before.reserve(realput);
-			for (std::size_t i = 0; i < realput; i++) {
-				if (str[i] != NULL) before.push_back(str[i]);
-			}
-			after.reserve(str.size() - realput);
-			for (std::size_t i = 0; i < str.size() - realput; i++) {
-				if (str[(realput + i)] != NULL) after.push_back(str[(realput)+i]);
-			}
-			return before + input + after;
 		}
 
 		std::string toUpper(std::string str) {//将 std::string str 中的小写字符转为大写
