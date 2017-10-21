@@ -4,8 +4,10 @@
 #include <boost\asio.hpp>
 #include <boost\asio\steady_timer.hpp>
 #include <thread>
-//Version 2.4.21V34
-//20171021
+#include <mutex>
+#include "DC_Test.h"
+//Version 2.4.21V35
+//20171022
 
 namespace DC {
 
@@ -17,21 +19,37 @@ namespace DC {
 
 				using tcp_socket = boost::asio::ip::tcp::socket;
 
+				class buffer : public std::istream {
+				public:
+					buffer() :std::istream(&stream_buffer) {}
+
+				public:
+					std::size_t size() noexcept {
+						return stream_buffer.size();
+					}
+
+					std::string string() noexcept {
+						try {
+							std::stringstream ss;
+							ss << rdbuf();
+							return ss.str();
+						}
+						catch (...) {
+							return std::string();
+						}
+					}
+
+				public:
+					boost::asio::streambuf stream_buffer;
+				};
+
 				template<typename socket_type>
-				class connection :public std::enable_shared_from_this<connection<socket_type>> {
+				class connection_base :public std::enable_shared_from_this<connection_base<socket_type>> {
 				public:
 					template <typename ...ARGS>
-					connection(boost::asio::io_service& io_service, ARGS&&... args) :timer(io_service), socket(new socket_type(std::forward<ARGS>(args)...)) {}
+					connection_base(boost::asio::io_service& io_service, ARGS&&... args) :timer(io_service), socket(new socket_type(std::forward<ARGS>(args)...)) {}
 
-					connection(const connection&) = delete;
-
-					connection(connection&&) = default;
-
-					connection& operator=(const connection&) = delete;
-
-					connection& operator=(connection&&) = default;
-
-					virtual ~connection() {
+					virtual ~connection_base() {
 						this->close();
 					}
 
@@ -51,22 +69,28 @@ namespace DC {
 					inline void close() {
 						if (!socket)
 							return;
-						socket->close();
+
+						std::unique_lock<std::mutex> lock(mutex);
+						boost::system::error_code ec;
+						socket->lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+						socket->lowest_layer().close(ec);
 					}
 
 				public:
 					boost::asio::steady_timer timer;
 					std::unique_ptr<socket_type> socket;//用unique_ptr是因为asio::ssl::stream<asio::ip::tcp::socket>不可移动也不可拷贝
+					std::mutex mutex;
+					buffer buffer;
 
-					//for test
-					//DC::Test
+					DC::Test test;
 				};
 
-				struct server_base_config {
+				struct server_config_base {
 					std::string address;
 					unsigned short port;
 					std::size_t thread_number = 1;
 					std::size_t max_request_size = std::numeric_limits<std::size_t>::max();
+					std::size_t max_keep_alive = 5;
 					bool tcp_nodelay = false;
 				};
 
@@ -97,11 +121,14 @@ namespace DC {
 						acceptor.bind(endpoint);
 						acceptor.listen();
 
-						accept();
+						post_accept();
 
 						threads.clear();
-						for (std::size_t i = 0; i < config->thread_number; i++)
+						for (std::size_t i = 1; i < config->thread_number; i++)
 							threads.emplace_back([this] {this->io_service.run(); });
+
+						if (config->thread_number == 1)
+							io_service.run();
 
 						for (auto& p : threads)
 							p.join();
@@ -119,7 +146,7 @@ namespace DC {
 						config.reset(new config_type(input_config));
 					}
 
-					server_base_config get_config()const {
+					server_config_base get_config()const {
 						if (!config)
 							throw std::exception();
 
@@ -127,14 +154,14 @@ namespace DC {
 					}
 
 				protected:
-					virtual void accept() = 0;
+					virtual void post_accept() = 0;
 
 				public:
 					boost::asio::io_service io_service;
 
 				protected:
 					boost::asio::ip::tcp::acceptor acceptor;
-					std::unique_ptr<server_base_config> config;
+					std::unique_ptr<server_config_base> config;
 					std::vector<std::thread> threads;
 				};
 
