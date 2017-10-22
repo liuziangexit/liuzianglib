@@ -15,13 +15,13 @@ namespace DC {
 
 		namespace Server {
 
-			namespace serverSpace {
+			namespace ServerSpace {
 
 				using tcp_socket = boost::asio::ip::tcp::socket;
 
 				class buffer : public std::istream {
 				public:
-					buffer() :std::istream(&stream_buffer) {}
+					buffer(const std::size_t& max_request_size) :std::istream(&stream_buffer), stream_buffer(max_request_size) {}
 
 				public:
 					std::size_t size() noexcept {
@@ -47,7 +47,7 @@ namespace DC {
 				class connection_base :public std::enable_shared_from_this<connection_base<socket_type>> {
 				public:
 					template <typename ...ARGS>
-					connection_base(boost::asio::io_service& io_service, ARGS&&... args) :timer(io_service), socket(new socket_type(std::forward<ARGS>(args)...)) {}
+					connection_base(boost::asio::io_service& io_service, const std::size_t& max_request_size, ARGS&&... args) :timer(io_service), buffer(max_request_size), socket(new socket_type(std::forward<ARGS>(args)...)) {}
 
 					virtual ~connection_base() {
 						this->close();
@@ -66,11 +66,16 @@ namespace DC {
 						});
 					}
 
-					inline void close() {
+					void cancel_timeout() {
+						boost::system::error_code ec;
+						timer.cancel(ec);
+					}
+
+					virtual void close() {
 						if (!socket)
 							return;
 
-						std::unique_lock<std::mutex> lock(mutex);
+						//std::unique_lock<std::mutex> lock(mutex);
 						boost::system::error_code ec;
 						socket->lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 						socket->lowest_layer().close(ec);
@@ -79,7 +84,7 @@ namespace DC {
 				public:
 					boost::asio::steady_timer timer;
 					std::unique_ptr<socket_type> socket;//用unique_ptr是因为asio::ssl::stream<asio::ip::tcp::socket>不可移动也不可拷贝
-					std::mutex mutex;
+					//std::mutex mutex;
 					buffer buffer;
 
 					DC::Test test;
@@ -90,7 +95,7 @@ namespace DC {
 					unsigned short port;
 					std::size_t thread_number = 1;
 					std::size_t max_request_size = std::numeric_limits<std::size_t>::max();
-					std::size_t max_keep_alive = 5;
+					std::size_t max_request_time = 5;
 					bool tcp_nodelay = false;
 				};
 
