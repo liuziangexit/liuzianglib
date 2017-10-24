@@ -1,8 +1,6 @@
 #pragma once
 #ifndef liuzianglib_http_server
 #define liuzianglib_http_server
-//Version 2.4.21V38
-//20171023
 #include <atomic>
 #include <iostream>
 #include <memory>
@@ -16,7 +14,6 @@
 #include <thread>
 #include <unordered_set>
 #include "DC_http.h"
-
 #ifdef __SSE2__
 #include <emmintrin.h>
 namespace DC {
@@ -50,7 +47,6 @@ namespace DC {
 	}
 }
 #endif
-
 #ifdef USE_STANDALONE_ASIO
 #include <asio.hpp>
 #include <asio/steady_timer.hpp>
@@ -81,25 +77,19 @@ namespace DC {
 	}
 }
 #endif
-
 #include <regex>
+//Version 2.4.21V39
+//20171024
+
 namespace DC {
+
 	namespace Web {
+
 		namespace http {
+
 			namespace serverSpace {
+
 				namespace regex = std;
-			}
-		}
-	}
-}
-
-namespace DC {
-	
-	namespace Web {
-
-		namespace http {
-
-			namespace serverSpace {
 
 				inline bool case_insensitive_equal(const std::string &str1, const std::string &str2) noexcept {
 					return str1.size() == str2.size() &&
@@ -107,7 +97,7 @@ namespace DC {
 						return tolower(a) == tolower(b);
 					});
 				}
-				
+
 				class CaseInsensitiveEqual {
 				public:
 					bool operator()(const std::string &str1, const std::string &str2) const noexcept {
@@ -248,55 +238,6 @@ namespace DC {
 					}
 				};
 
-				class RequestMessage {
-				public:
-					/// Parse request line and header fields
-					static bool parse(std::istream &stream, std::string &method, std::string &path, std::string &query_string, std::string &version, DC::Web::http::headers &header) noexcept {
-						header.clear();
-						std::string line;
-						getline(stream, line);
-						std::size_t method_end;
-						if ((method_end = line.find(' ')) != std::string::npos) {
-							method = line.substr(0, method_end);
-
-							std::size_t query_start = std::string::npos;
-							std::size_t path_and_query_string_end = std::string::npos;
-							for (std::size_t i = method_end + 1; i < line.size(); ++i) {
-								if (line[i] == '?' && (i + 1) < line.size())
-									query_start = i + 1;
-								else if (line[i] == ' ') {
-									path_and_query_string_end = i;
-									break;
-								}
-							}
-							if (path_and_query_string_end != std::string::npos) {
-								if (query_start != std::string::npos) {
-									path = line.substr(method_end + 1, query_start - method_end - 2);
-									query_string = line.substr(query_start, path_and_query_string_end - query_start);
-								}
-								else
-									path = line.substr(method_end + 1, path_and_query_string_end - method_end - 1);
-
-								std::size_t protocol_end;
-								if ((protocol_end = line.find('/', path_and_query_string_end + 1)) != std::string::npos) {
-									if (line.compare(path_and_query_string_end + 1, protocol_end - path_and_query_string_end - 1, "HTTP") != 0)
-										return false;
-									version = line.substr(protocol_end + 1, line.size() - protocol_end - 2);
-								}
-								else
-									return false;
-
-								header = HttpHeader::parse(stream);
-							}
-							else
-								return false;
-						}
-						else
-							return false;
-						return true;
-					}
-				};
-
 				class ResponseMessage {
 				public:
 					/// Parse status line and header fields
@@ -372,7 +313,7 @@ namespace DC {
 
 				public:
 					ScopeRunner() noexcept : count(0) {}
-					
+
 					class SharedLock {
 						friend class ScopeRunner;
 						std::atomic<long> &count;
@@ -448,10 +389,6 @@ namespace DC {
 						}
 
 					public:
-						std::size_t size() noexcept {
-							return streambuf.size();
-						}
-
 						/// Use this function if you need to recursively send parts of a longer message
 						void send(const std::function<void(const error_code &)> &callback = nullptr) noexcept {
 							session->connection->set_timeout(timeout_content);
@@ -485,6 +422,10 @@ namespace DC {
 								*this << content;
 						}
 
+						void write(const DC::Web::http::response& response) {
+							*this << response.toStr();
+						}
+
 						/// Convenience function for writing status line, header fields, and content
 						void write(DC::Web::http::status_code status_code, std::istream &content, const CaseInsensitiveMultimap &header = CaseInsensitiveMultimap()) {
 							*this << "HTTP/1.1 " << status_code << "\r\n";
@@ -509,6 +450,10 @@ namespace DC {
 						/// Convenience function for writing success status line, and header fields
 						void write(const CaseInsensitiveMultimap &header) {
 							write(DC::Web::http::status_codes::OK, std::string(), header);
+						}
+
+						std::size_t size() noexcept {
+							return streambuf.size();
 						}
 
 						/// If true, force server to close the connection after the response have been sent.
@@ -552,21 +497,11 @@ namespace DC {
 							: streambuf(max_request_streambuf_size), content(streambuf), remote_endpoint_address(remote_endpoint_address), remote_endpoint_port(remote_endpoint_port) {}
 
 					public:
-						std::string method, path, query_string, http_version;
-
+						DC::Web::http::request request;
 						Content content;
-
-						DC::Web::http::headers header;
-
 						regex::smatch path_match;
-
 						std::string remote_endpoint_address;
 						unsigned short remote_endpoint_port;
-
-						/// Returns query keys with percent-decoded values.
-						CaseInsensitiveMultimap parse_query_string() noexcept {
-							return Gida::QueryString::parse(query_string);
-						}
 					};
 
 				protected:
@@ -654,7 +589,7 @@ namespace DC {
 						bool reuse_address = true;
 					};
 					/// Set before calling start().
-					Config config;
+					Config internal_config;
 
 				private:
 					class regex_orderable : public regex::regex {
@@ -691,15 +626,15 @@ namespace DC {
 							io_service->reset();
 
 						asio::ip::tcp::endpoint endpoint;
-						if (config.address.size() > 0)
-							endpoint = asio::ip::tcp::endpoint(asio::ip::address::from_string(config.address), config.port);
+						if (internal_config.address.size() > 0)
+							endpoint = asio::ip::tcp::endpoint(asio::ip::address::from_string(internal_config.address), internal_config.port);
 						else
-							endpoint = asio::ip::tcp::endpoint(asio::ip::tcp::v4(), config.port);
+							endpoint = asio::ip::tcp::endpoint(asio::ip::tcp::v4(), internal_config.port);
 
 						if (!acceptor)
 							acceptor = std::unique_ptr<asio::ip::tcp::acceptor>(new asio::ip::tcp::acceptor(*io_service));
 						acceptor->open(endpoint.protocol());
-						acceptor->set_option(asio::socket_base::reuse_address(config.reuse_address));
+						acceptor->set_option(asio::socket_base::reuse_address(internal_config.reuse_address));
 						acceptor->bind(endpoint);
 						acceptor->listen();
 
@@ -708,14 +643,14 @@ namespace DC {
 						if (internal_io_service) {
 							// If thread_pool_size>1, start m_io_service.run() in (thread_pool_size-1) threads for thread-pooling
 							threads.clear();
-							for (std::size_t c = 1; c < config.thread_pool_size; c++) {
+							for (std::size_t c = 1; c < internal_config.thread_pool_size; c++) {
 								threads.emplace_back([this]() {
 									this->io_service->run();
 								});
 							}
 
 							// Main thread
-							if (config.thread_pool_size > 0)
+							if (internal_config.thread_pool_size > 0)
 								io_service->run();
 
 							// Wait for the rest of the threads, if any, to finish as well
@@ -758,7 +693,7 @@ namespace DC {
 
 					std::shared_ptr<ScopeRunner> handler_runner;
 
-					ServerBase(unsigned short port) noexcept : config(port), connections(new std::unordered_set<Connection *>()), connections_mutex(new std::mutex()), handler_runner(new ScopeRunner()) {}
+					ServerBase(unsigned short port) noexcept : internal_config(port), connections(new std::unordered_set<Connection *>()), connections_mutex(new std::mutex()), handler_runner(new ScopeRunner()) {}
 
 					virtual void accept() = 0;
 
@@ -783,14 +718,14 @@ namespace DC {
 					}
 
 					void read_request_and_content(const std::shared_ptr<Session> &session) {
-						session->connection->set_timeout(config.timeout_request);
+						session->connection->set_timeout(internal_config.timeout_request);
 						asio::async_read_until(*session->connection->socket, session->request->streambuf, "\r\n\r\n", [this, session](const error_code &ec, std::size_t bytes_transferred) {
 							session->connection->cancel_timeout();
 							auto lock = session->connection->handler_runner->continue_lock();
 							if (!lock)
 								return;
 							if ((!ec || ec == asio::error::not_found) && session->request->streambuf.size() == session->request->streambuf.max_size()) {
-								auto response = std::shared_ptr<Response>(new Response(session, this->config.timeout_content));
+								auto response = std::shared_ptr<Response>(new Response(session, this->internal_config.timeout_content));
 								response->write(DC::Web::http::status_codes::BadRequest);
 								response->send();
 								if (this->on_error)
@@ -804,8 +739,10 @@ namespace DC {
 								// streambuf (maybe some bytes of the content) is appended to in the async_read-function below (for retrieving content).
 								std::size_t num_additional_bytes = session->request->streambuf.size() - bytes_transferred;
 
-								if (!RequestMessage::parse(session->request->content, session->request->method, session->request->path,
-									session->request->query_string, session->request->http_version, session->request->header)) {
+								try {
+									session->request->request = DC::Web::http::request_deserialization(session->request->content.string());
+								}
+								catch (...) {
 									if (this->on_error)
 										this->on_error(session->request, make_error_code::make_error_code(errc::protocol_error));
 									return;
@@ -814,7 +751,7 @@ namespace DC {
 								// If content, read that as well
 								DC::Web::http::httpSpace::header it;
 								try {
-									it = session->request->header.get_header(" Content-Length");
+									it = session->request->request.headers().get_header(" Content-Length");
 									unsigned long long content_length = 0;
 									try {
 										content_length = stoull(it.GetValue());
@@ -825,7 +762,7 @@ namespace DC {
 										return;
 									}
 									if (content_length > num_additional_bytes) {
-										session->connection->set_timeout(config.timeout_content);
+										session->connection->set_timeout(internal_config.timeout_content);
 										asio::async_read(*session->connection->socket, session->request->streambuf, asio::transfer_exactly(content_length - num_additional_bytes), [this, session](const error_code &ec, std::size_t /*bytes_transferred*/) {
 											session->connection->cancel_timeout();
 											auto lock = session->connection->handler_runner->continue_lock();
@@ -833,7 +770,7 @@ namespace DC {
 												return;
 											if (!ec) {
 												if (session->request->streambuf.size() == session->request->streambuf.max_size()) {
-													auto response = std::shared_ptr<Response>(new Response(session, this->config.timeout_content));
+													auto response = std::shared_ptr<Response>(new Response(session, this->internal_config.timeout_content));
 													response->write(DC::Web::http::status_codes::BadRequest);
 													response->send();
 													if (this->on_error)
@@ -854,7 +791,7 @@ namespace DC {
 									catch (...) {
 										if (this->on_error)
 											this->on_error(session->request, ec);
-									}									
+									}
 								}
 							}
 						});
@@ -863,7 +800,7 @@ namespace DC {
 					void find_resource(const std::shared_ptr<Session> &session) {
 						// Upgrade connection
 						if (on_upgrade) {
-							auto it = session->request->header.get_header("Upgrade");
+							auto it = session->request->request.headers().get_header("Upgrade");
 							{
 								std::unique_lock<std::mutex> lock(*connections_mutex);
 								auto it = connections->find(session->connection.get());
@@ -876,25 +813,26 @@ namespace DC {
 						}
 						// Find path- and method-match, and call write_response
 						for (auto &regex_method : resource) {
-							auto it = regex_method.second.find(session->request->method);
+							auto it = regex_method.second.find(session->request->request.get_method());
 							if (it != regex_method.second.end()) {
 								regex::smatch sm_res;
-								if (regex::regex_match(session->request->path, sm_res, regex_method.first)) {
+								std::string path = session->request->request.get_uri();
+								if (regex::regex_match(path, sm_res, regex_method.first)) {
 									session->request->path_match = std::move(sm_res);
 									write_response(session, it->second);
 									return;
 								}
 							}
 						}
-						auto it = default_resource.find(session->request->method);
+						auto it = default_resource.find(session->request->request.get_method());
 						if (it != default_resource.end())
 							write_response(session, it->second);
 					}
 
 					void write_response(const std::shared_ptr<Session> &session,
 						std::function<void(std::shared_ptr<typename ServerBase<socket_type>::Response>, std::shared_ptr<typename ServerBase<socket_type>::Request>)> &resource_function) {
-						session->connection->set_timeout(config.timeout_content);
-						auto response = std::shared_ptr<Response>(new Response(session, config.timeout_content), [this](Response *response_ptr) {
+						session->connection->set_timeout(internal_config.timeout_content);
+						auto response = std::shared_ptr<Response>(new Response(session, internal_config.timeout_content), [this](Response *response_ptr) {
 							auto response = std::shared_ptr<Response>(response_ptr);
 							response->send([this, response](const error_code &ec) {
 								if (!ec) {
@@ -903,18 +841,18 @@ namespace DC {
 
 									std::string connection_value;
 									try {
-										connection_value = response->session->request->header.get_value("Connection");
+										connection_value = response->session->request->request.headers().get_value("Connection");
 										if (connection_value == "close")
 											return;
 										if (connection_value == "keep-alive") {
-											auto new_session = std::make_shared<Session>(this->config.max_request_streambuf_size, response->session->connection);
+											auto new_session = std::make_shared<Session>(this->internal_config.max_request_streambuf_size, response->session->connection);
 											this->read_request_and_content(new_session);
 											return;
 										}
 									}
 									catch (...) {
-										if (response->session->request->http_version >= "1.1") {
-											auto new_session = std::make_shared<Session>(this->config.max_request_streambuf_size, response->session->connection);
+										if (response->session->request->request.get_version() >= "1.1") {
+											auto new_session = std::make_shared<Session>(this->internal_config.max_request_streambuf_size, response->session->connection);
 											this->read_request_and_content(new_session);
 											return;
 										}
@@ -948,7 +886,7 @@ namespace DC {
 
 				protected:
 					void accept() override {
-						auto session = std::make_shared<Session>(config.max_request_streambuf_size, create_connection(*io_service));
+						auto session = std::make_shared<Session>(internal_config.max_request_streambuf_size, create_connection(*io_service));
 
 						acceptor->async_accept(*session->connection->socket, [this, session](const error_code &ec) {
 							auto lock = session->connection->handler_runner->continue_lock();
@@ -972,7 +910,57 @@ namespace DC {
 					}
 				};
 
+				template <typename server_type>
+				struct http_server_base :private serverSpace::Server<server_type> {
+					std::string server_name = "liuzianglib_http_server";
+					serverSpace::Server<server_type>::Config& config = this->internal_config;
+
+					template <typename ...ARGS>
+					http_server_base(ARGS&&... args) :serverSpace::Server<server_type>(std::forward<ARGS>(args)...) {}
+
+					virtual void start()override {
+						serverSpace::Server<server_type>::start();
+					}
+
+					void stop()noexcept {
+						serverSpace::Server<server_type>::stop();
+					}
+
+					void set_resource(const std::string& regular, const std::string& method, const std::function<DC::Web::http::response(const DC::Web::http::request&)>& callback) {
+						this->resource[regular][method] = std::bind(&http_server_base::resource_forward, this, std::placeholders::_1, std::placeholders::_2, callback);
+					}
+
+					void set_default_resource(const std::string& method, const std::function<DC::Web::http::response(const DC::Web::http::request&)>& callback) {
+						this->default_resource[method] = std::bind(&http_server_base::resource_forward, this, std::placeholders::_1, std::placeholders::_2, callback);
+					}
+
+					void set_on_error(const std::function<void(const DC::Web::http::request&)>& callback) {
+						this->on_error = [callback](std::shared_ptr<Request> request, const boost::system::error_code&) {
+							callback(request->request);
+						};
+					}
+
+				private:
+					void resource_forward(std::shared_ptr<serverSpace::Server<server_type>::Response> response, std::shared_ptr<serverSpace::Server<server_type>::Request> request, const std::function<DC::Web::http::response(const DC::Web::http::request&)>& callback) {
+						auto http_response = callback(request->request);
+
+						if (!http_response.headers().has_key("Content-Length"))
+							http_response.headers().add(DC::Web::http::add_header("Content-Length", DC::STR::toString(http_response.body().size())));
+						if (!http_response.headers().has_key("Server"))
+							http_response.headers().add(DC::Web::http::add_header("Server", this->server_name));
+
+						response->write(http_response);
+					}
+				};
+
 			}
+
+			class http_server final :public serverSpace::http_server_base<serverSpace::HTTP> {};
+
+			/*
+			resource function: DC::Web::http::response(const DC::Web::http::request&)
+			on_error function: void(const DC::Web::http::request&)
+			*/
 
 		}
 

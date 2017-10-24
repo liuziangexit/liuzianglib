@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.21V32
-//20170920
+//Version 2.4.21V39
+//20171024
 
 namespace DC {
 
@@ -245,7 +245,9 @@ namespace DC {
 					template<typename titleType, typename headersType, typename bodyType>
 					friend void Derived_construct(base& object, titleType&& inputtitle, headersType&& inputheaders, bodyType&& inputbody);
 				public:
-					base() = default;
+					base() {
+						set_version(1.1);
+					}
 
 					base(const base&) = default;
 

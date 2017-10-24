@@ -1,20 +1,18 @@
 #pragma once
 #ifndef liuzianglib_https_server
 #define liuzianglib_https_server
-//Version 2.4.21V38
-//20171023
 #include "DC_http_server.h"
 #include <algorithm>
-
 #ifdef USE_STANDALONE_ASIO
 #include <asio/ssl.hpp>
 #else
 #include <boost/asio/ssl.hpp>
 #endif
-
 #include <openssl/ssl.h>
 #pragma comment(lib, "libcrypto.lib")
 #pragma comment(lib, "libssl.lib")
+//Version 2.4.21V39
+//20171024
 
 namespace DC {
 
@@ -47,8 +45,8 @@ namespace DC {
 					void start() override {
 						if (set_session_id_context) {
 							// Creating session_id_context from address:port but reversed due to small SSL_MAX_SSL_SESSION_ID_LENGTH
-							session_id_context = std::to_string(config.port) + ':';
-							session_id_context.append(config.address.rbegin(), config.address.rend());
+							session_id_context = std::to_string(internal_config.port) + ':';
+							session_id_context.append(internal_config.address.rbegin(), internal_config.address.rend());
 							SSL_CTX_set_session_id_context(context.native_handle(), reinterpret_cast<const unsigned char *>(session_id_context.data()),
 								std::min<std::size_t>(session_id_context.size(), SSL_MAX_SSL_SESSION_ID_LENGTH));
 						}
@@ -59,7 +57,7 @@ namespace DC {
 					asio::ssl::context context;
 
 					void accept() override {
-						auto session = std::make_shared<Session>(config.max_request_streambuf_size, create_connection(*io_service, context));
+						auto session = std::make_shared<Session>(internal_config.max_request_streambuf_size, create_connection(*io_service, context));
 
 						acceptor->async_accept(session->connection->socket->lowest_layer(), [this, session](const error_code &ec) {
 							auto lock = session->connection->handler_runner->continue_lock();
@@ -74,7 +72,7 @@ namespace DC {
 								error_code ec;
 								session->connection->socket->lowest_layer().set_option(option, ec);
 
-								session->connection->set_timeout(config.timeout_request);
+								session->connection->set_timeout(internal_config.timeout_request);
 								session->connection->socket->async_handshake(asio::ssl::stream_base::server, [this, session](const error_code &ec) {
 									session->connection->cancel_timeout();
 									auto lock = session->connection->handler_runner->continue_lock();
@@ -93,6 +91,10 @@ namespace DC {
 				};
 
 			}
+
+			struct https_server final :public serverSpace::http_server_base<serverSpace::HTTPS> {
+				https_server(const std::string& certificate_file, const std::string& private_key_file) :serverSpace::http_server_base<serverSpace::HTTPS>(certificate_file, private_key_file) {}
+			};
 
 		}
 
