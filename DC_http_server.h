@@ -78,8 +78,8 @@ namespace DC {
 }
 #endif
 #include <regex>
-//Version 2.4.21V39
-//20171024
+//Version 2.4.21V40
+//20171025
 
 namespace DC {
 
@@ -743,6 +743,9 @@ namespace DC {
 									session->request->request = DC::Web::http::request_deserialization(session->request->content.string());
 								}
 								catch (...) {
+									auto response = std::shared_ptr<Response>(new Response(session, this->internal_config.timeout_content));
+									response->write(DC::Web::http::status_codes::BadRequest);
+									response->send();
 									if (this->on_error)
 										this->on_error(session->request, make_error_code::make_error_code(errc::protocol_error));
 									return;
@@ -946,6 +949,8 @@ namespace DC {
 
 						if (!http_response.headers().has_key("Content-Length"))
 							http_response.headers().add(DC::Web::http::add_header("Content-Length", DC::STR::toString(http_response.body().size())));
+						if (!http_response.headers().has_key("Connection"))
+							http_response.headers().add(DC::Web::http::add_header("Connection", "keep-alive"));
 						if (!http_response.headers().has_key("Server"))
 							http_response.headers().add(DC::Web::http::add_header("Server", this->server_name));
 
