@@ -78,8 +78,8 @@ namespace DC {
 }
 #endif
 #include <regex>
-//Version 2.4.21V40
-//20171025
+//Version 2.4.21V41
+//20171026
 
 namespace DC {
 
@@ -759,7 +759,7 @@ namespace DC {
 									try {
 										content_length = stoull(it.GetValue());
 									}
-									catch (const std::exception &e) {
+									catch (const std::exception) {
 										if (this->on_error)
 											this->on_error(session->request, make_error_code::make_error_code(errc::protocol_error));
 										return;
@@ -843,8 +843,10 @@ namespace DC {
 										return;
 
 									std::string connection_value;
-									try {
+									try {										
 										connection_value = response->session->request->request.headers().get_value("Connection");
+										connection_value = DC::STR::toLower(connection_value);
+
 										if (connection_value == "close")
 											return;
 										if (connection_value == "keep-alive") {
