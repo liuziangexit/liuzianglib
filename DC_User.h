@@ -7,8 +7,8 @@
 #include "DC_Exception.h"
 #include "DC_MD5.h"
 #pragma comment(lib,"ws2_32.lib")
-//Version 2.4.21V30
-//20170914
+//Version 2.4.21V43
+//20171026
 
 namespace DC {
 	
@@ -174,10 +174,10 @@ namespace DC {
 				temp2.resize(8);
 				return temp + temp2;
 			}
-
-		private:
-			DC_MySQL sql_connection;
 			MD5 md5;
+
+		public:
+			DC_MySQL sql_connection;			
 		};
 
 	}
