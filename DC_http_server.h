@@ -78,7 +78,7 @@ namespace DC {
 }
 #endif
 #include <regex>
-//Version 2.4.21V41
+//Version 2.4.21V42
 //20171026
 
 namespace DC {
@@ -741,6 +741,8 @@ namespace DC {
 
 								try {
 									session->request->request = DC::Web::http::request_deserialization(session->request->content.string());
+									for (auto &p : session->request->request.headers())
+										p.SetName(DC::STR::toLower(p.GetName()));
 								}
 								catch (...) {
 									auto response = std::shared_ptr<Response>(new Response(session, this->internal_config.timeout_content));
@@ -754,7 +756,7 @@ namespace DC {
 								// If content, read that as well
 								DC::Web::http::httpSpace::header it;
 								try {
-									it = session->request->request.headers().get_header(" Content-Length");
+									it = session->request->request.headers().get_header("content-length");
 									unsigned long long content_length = 0;
 									try {
 										content_length = stoull(it.GetValue());
@@ -803,7 +805,7 @@ namespace DC {
 					void find_resource(const std::shared_ptr<Session> &session) {
 						// Upgrade connection
 						if (on_upgrade) {
-							auto it = session->request->request.headers().get_header("Upgrade");
+							auto it = session->request->request.headers().get_header("upgrade");
 							{
 								std::unique_lock<std::mutex> lock(*connections_mutex);
 								auto it = connections->find(session->connection.get());
@@ -844,7 +846,7 @@ namespace DC {
 
 									std::string connection_value;
 									try {										
-										connection_value = response->session->request->request.headers().get_value("Connection");
+										connection_value = response->session->request->request.headers().get_value("connection");
 										connection_value = DC::STR::toLower(connection_value);
 
 										if (connection_value == "close")

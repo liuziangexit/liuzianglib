@@ -7,8 +7,8 @@
 #include <string>
 #include <cctype>
 #include <functional>
-//Version 2.4.21V39
-//20171024
+//Version 2.4.21V42
+//20171026
 
 namespace DC {
 
@@ -70,6 +70,14 @@ namespace DC {
 					virtual void Set(const std::string& input)override {
 						DC::KeyValuePair::Set(input);
 						if (!value.empty()) if (*value.begin() == ' ') value.erase(value.begin());
+					}
+
+					inline void SetName(const std::string& str) {
+						this->name = str;
+					}
+
+					inline void SetValue(const std::string& str) {
+						this->value = str;
 					}
 
 				protected:
@@ -220,6 +228,14 @@ namespace DC {
 
 				inline bool empty()const {
 					return m_data.empty();
+				}
+
+				inline std::vector<httpSpace::header>::iterator begin() {
+					return m_data.begin();
+				}
+
+				inline std::vector<httpSpace::header>::iterator end() {
+					return m_data.end();
 				}
 
 			private:
