@@ -78,8 +78,8 @@ namespace DC {
 }
 #endif
 #include <regex>
-//Version 2.4.21V42
-//20171026
+//Version 2.4.21V44
+//20171027
 
 namespace DC {
 
@@ -788,6 +788,8 @@ namespace DC {
 												this->on_error(session->request, ec);
 										});
 									}
+									else
+										this->find_resource(session);
 								}
 								catch (...) {
 									try {
