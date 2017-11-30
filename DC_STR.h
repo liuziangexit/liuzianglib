@@ -8,8 +8,8 @@
 #include <sstream>
 #include "DC_Exception.h"
 #include "DC_type.h"
-//Version 2.4.21V33
-//20170920
+//Version 2.4.21V45
+//20171030
 
 namespace DC {
 
@@ -242,7 +242,7 @@ namespace DC {
 		}
 
 		template <>
-		std::string toString<int>(const int& num)noexcept {
+		std::string toString<int>(const int& num) {
 			if (num == 0) return "0";
 			if (STRSpace::isNegative(num)) {
 				std::string rv("-");
