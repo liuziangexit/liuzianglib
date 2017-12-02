@@ -9,8 +9,8 @@
 #include "liuzianglib.h"
 #include "DC_STR.h"
 #include "DC_var.h"
-//Version 2.4.21V32
-//20170920
+//Version 2.4.21V46
+//20171202
 
 namespace DC {
 
@@ -136,7 +136,7 @@ namespace DC {
 			class transparent final :public jsonSpace::base {
 				friend class object;
 			public:
-				transparent::transparent() :withTable(false) {}
+				transparent() :withTable(false) {}
 
 				transparent(const std::string&);
 
@@ -616,7 +616,7 @@ namespace DC {
 					//判断key在本层（既不在字符串内，又不在其它对象内，同时也不能是一个value）
 					for (auto i = findResult.begin(); i != findResult.end();) {
 						auto isValue = [&findNeXTcharReverse, this](const DC::pos_type& input) {//是否为一个value(在冒号之后的
-							std::result_of_t<decltype(findNeXTcharReverse)(const DC::pos_type&)> result;//这个类型是findNeXTcharReverse的返回值类型							
+							std::result_of<decltype(findNeXTcharReverse)(const DC::pos_type&)>::type result;//这个类型是findNeXTcharReverse的返回值类型							
 							try {
 								if (input - 1 < 0 || input - 1 + 1 > this->rawStr.size()) return false;//下标非法了
 								if (this->rawStr[input - 1] == ':') return true;
