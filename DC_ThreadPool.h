@@ -6,8 +6,8 @@
 #include <mutex>
 #include <future>
 #include <queue>
-//Version 2.4.21V30
-//20170914
+//Version 2.4.22V17
+//20180301
 
 namespace DC {
 
@@ -35,7 +35,8 @@ namespace DC {
 		{
 			RUNNING,
 			STOP,
-			EXPIRING//将亡，意味着join已被调用
+			EXPIRING,//将亡，意味着join已被调用
+			WAITING//wait已被调用
 		};
 
 		typedef std::function<void()> job_type;
@@ -71,13 +72,22 @@ namespace DC {
 			return RunningNumber;
 		}
 
+		//立即停止，不会完成工作队列
 		void join() {
-			if (state_ == state::EXPIRING) return;
 			state_ = state::EXPIRING;
 			thread_cv.notify_all();
-			for (std::thread& t : WorkerThreads) {
-				if (t.joinable()) t.join();
-			}
+			for (std::thread& t : WorkerThreads) 
+				if (t.joinable()) 
+					t.join();
+		}
+
+		//完成工作队列后停止
+		void wait() {
+			state_ = state::WAITING;
+			thread_cv.notify_all();
+			for (std::thread& t : WorkerThreads)
+				if (t.joinable())
+					t.join();
 		}
 
 	private:
@@ -90,10 +100,13 @@ namespace DC {
 		}
 
 		void thread_func() {
-			while (1) {
+			while (true) {
 				std::unique_lock<std::mutex> lock(Mwthread);
-				thread_cv.wait(lock, [this] {return (!jobs.empty() && state_ == state::RUNNING) || state_ == state::EXPIRING; });
-				if (state_ == state::EXPIRING) return;
+				thread_cv.wait(lock, [this] {
+					return (!jobs.empty() && state_ == state::RUNNING) || (state_ == state::EXPIRING|| state_ == state::WAITING); 
+				});
+				if (state_ == state::EXPIRING || (state_ == state::WAITING&&jobs.empty()))
+					return;
 				job_type job = std::move(jobs.front());
 				jobs.pop();
 				lock.unlock();
