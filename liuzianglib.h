@@ -5,8 +5,8 @@
 #include <random>
 #include <queue>
 #include "DC_Any.h"
-//Version 2.4.21V31
-//20170914
+//Version 2.4.22V19
+//20180326
 
 namespace DC {
 
@@ -34,7 +34,7 @@ namespace DC {
 		b = std::move(TEMP);
 	}
 
-	PARS_V GetCommandLineParameters(int argc, char *argv[]) {
+	PARS_V GetCommandLineParameters(int argc, const char *argv[]) {
 		PARS_V returnthis;
 		returnthis.reserve(argc);
 
