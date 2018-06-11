@@ -4,6 +4,7 @@
 #include <winsock2.h>
 #include <string>
 #include <memory>
+#include <vector>
 #pragma comment(lib, "ws2_32.lib")
 //Version 2.4.21V30
 //20170914
