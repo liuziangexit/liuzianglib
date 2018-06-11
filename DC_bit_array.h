@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <climits>
 #include <type_traits>
-//Version 2.4.22V20
+//Version 2.4.22V21
 //20180611
 
 namespace DC {
@@ -42,6 +42,14 @@ namespace DC {
 
 		constexpr std::size_t size()const {
 			return sizeof(value_type) * CHAR_BIT;
+		}
+
+		constexpr value_type get_value()const {
+			return this->value;
+		}
+
+		constexpr void set_value(value_type v) {
+			this->value = v;
 		}
 
 	private:
