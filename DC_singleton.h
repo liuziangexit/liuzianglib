@@ -28,8 +28,10 @@ namespace DC {
 				std::atomic_thread_fence(std::memory_order_acquire);
 				std::unique_lock<LockT> ulocker(m_lock);
 				if (m_object == nullptr) {
+					// 做异常处理
+					T *tmp = new(m_allocator.allocate(1)) T(std::forward<Args>(args)...);
 					std::atomic_thread_fence(std::memory_order_release);
-					m_object = new(m_allocator.allocate(1)) T(std::forward<Args>(args)...);
+					m_object = tmp;
 				}
 			}
 			return m_object;
