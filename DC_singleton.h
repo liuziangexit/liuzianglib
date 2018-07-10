@@ -17,6 +17,10 @@ namespace DC {
 
 		singleton(const singleton&) = delete;
 
+		~singleton() {
+			this->clear();
+		}
+
 		void* operator new(std::size_t) = delete;
 
 		void operator delete(void*) = delete;
@@ -28,8 +32,16 @@ namespace DC {
 				std::atomic_thread_fence(std::memory_order_acquire);
 				std::unique_lock<LockT> ulocker(m_lock);
 				if (m_object == nullptr) {
-					// 做异常处理
-					T *tmp = new(m_allocator.allocate(1)) T(std::forward<Args>(args)...);
+					T *tmp = nullptr;
+					try {
+						tmp = new(m_allocator.allocate(1)) T(std::forward<Args>(args)...);
+					}
+					catch (std::bad_alloc& ex) {
+						throw ex;
+					}
+					catch (...) {
+						throw std::exception("constructor throws an exception");
+					}
 					std::atomic_thread_fence(std::memory_order_release);
 					m_object = tmp;
 				}
@@ -37,10 +49,17 @@ namespace DC {
 			return m_object;
 		}
 
-		void clear();
+		void clear()noexcept {
+			T* tmp = m_object;
+			std::atomic_thread_fence(std::memory_order_acq_rel);
+			m_object = nullptr;
+			std::unique_lock<LockT> ulocker(m_lock);
+			tmp->~T();
+			m_allocator.deallocate(tmp, 1);
+		}
 
 	private:
-		T *m_object{ nullptr };
+		T * m_object{ nullptr };
 		LockT m_lock;
 		AllocatorT m_allocator;
 	};
