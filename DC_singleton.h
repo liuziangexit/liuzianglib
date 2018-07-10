@@ -7,6 +7,7 @@
 #include <memory>
 //Version 2.4.22V22
 //20180709
+//这个文件是实验性的，很有可能是错误的写法
 
 namespace DC {
 
@@ -55,8 +56,9 @@ namespace DC {
 			if (tmp == nullptr)
 				return;
 			std::atomic_thread_fence(std::memory_order_release);
-			m_object = nullptr;
 			std::unique_lock<LockT> ulocker(m_lock);
+			m_object = nullptr;			
+			ulocker.unlock();
 			tmp->~T();
 			m_allocator.deallocate(tmp, 1);
 		}
