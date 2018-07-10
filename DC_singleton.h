@@ -51,7 +51,10 @@ namespace DC {
 
 		void clear()noexcept {
 			T* tmp = m_object;
-			std::atomic_thread_fence(std::memory_order_acq_rel);
+			std::atomic_thread_fence(std::memory_order_acquire);
+			if (tmp == nullptr)
+				return;
+			std::atomic_thread_fence(std::memory_order_release);
 			m_object = nullptr;
 			std::unique_lock<LockT> ulocker(m_lock);
 			tmp->~T();
