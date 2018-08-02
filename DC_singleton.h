@@ -1,9 +1,7 @@
 #pragma once
 #ifndef liuzianglib_singleton
 #define liuzianglib_singleton
-#include <iostream>
 #include <atomic>
-#include <mutex>
 #include <memory>
 //Version 2.4.22V22
 //20180709
@@ -32,6 +30,22 @@ namespace DC {
 
 namespace DC {
 
+	namespace singletonSpace {
+
+		class FlagHolder {
+		public:
+			FlagHolder(std::atomic_flag& input) :m_flag(input) {}
+
+			~FlagHolder() {
+				this->m_flag.clear(std::memory_order_release);
+			}
+
+		private:
+			std::atomic_flag& m_flag;
+		};
+
+	}
+
 	template <typename T, typename AllocatorT = std::allocator<T>>
 	class singleton final {
 	public:
@@ -39,7 +53,7 @@ namespace DC {
 
 		singleton(const singleton&) = delete;
 
-		~singleton() {
+		~singleton()noexcept {
 			this->clear();
 		}
 
@@ -48,50 +62,58 @@ namespace DC {
 		void operator delete(void*) = delete;
 
 	public:
+		//try to create an instance and return it
+		//if an instance already exists, return it
 		template <typename ...Args>
-		T* get_instance(Args ...args) {
-			if (m_object == nullptr) {
-				std::atomic_thread_fence(std::memory_order_acquire);//load-store
-				while (m_flag.test_and_set(std::memory_order_relaxed))
-					DC::singletonSpace::spin_loop_pause();
-				//有疑问：如何保证store-load
-				if (m_object == nullptr) {
-					T *tmp = nullptr;
-					try {
-						tmp = new(m_allocator.allocate(1)) T(std::forward<Args>(args)...);
-					}
-					catch (std::bad_alloc& ex) {
-						throw ex;
-					}
-					catch (...) {
-						throw std::exception("constructor throws an exception");
-					}
-					std::atomic_thread_fence(std::memory_order_release);//store-store
-					m_object = tmp;
-					std::atomic_thread_fence(std::memory_order_release);//store-store
-					m_flag.clear();
+		T* try_create_instance(Args ...args) {
+			lock_flag();
+			DC::singletonSpace::FlagHolder fh(this->m_flag);
+
+			if (this->m_instance == nullptr) {
+				try {
+					this->m_instance = new(m_allocator.allocate(1)) T(std::forward<Args>(args)...);
+				}
+				catch (std::bad_alloc& ex) {
+					throw ex;
+				}
+				catch (...) {
+					throw std::exception("constructor throws an exception");
 				}
 			}
-			return m_object;
+
+			return this->m_instance;
 		}
 
+		//read only
+		//return nullptr if there is no instance yet
+		T* get_instance() {
+			lock_flag();
+			DC::singletonSpace::FlagHolder fh(this->m_flag);
+
+			return this->m_instance;
+		}
+
+		//try to destory instance
+		//if there is no instance, do nothing
 		void clear()noexcept {
-			T* tmp = m_object;
-			if (tmp == nullptr)
-				return;
-			std::atomic_thread_fence(std::memory_order_acquire);//load-store
-			while (m_flag.test_and_set(std::memory_order_relaxed))
-				DC::singletonSpace::spin_loop_pause();
-			std::atomic_thread_fence(std::memory_order_release);//store-store
-			m_object = nullptr;
-			std::atomic_thread_fence(std::memory_order_release);//store-store
-			m_flag.clear();
-			tmp->~T();
-			m_allocator.deallocate(tmp, 1);
+			lock_flag();
+			DC::singletonSpace::FlagHolder fh(this->m_flag);
+
+			if (this->m_instance != nullptr) {
+				this->m_instance->~T();
+				this->m_allocator.deallocate(this->m_instance, 1);
+				this->m_instance = nullptr;
+			}
 		}
 
 	private:
-		T * m_object{ nullptr };
+		void lock_flag() {
+			while (this->m_flag.test_and_set(std::memory_order_acquire))
+				DC::singletonSpace::spin_loop_pause();
+		}
+
+	private:
+		T * m_instance{ nullptr };
 		std::atomic_flag m_flag{ ATOMIC_FLAG_INIT };
 		AllocatorT m_allocator;
 	};
