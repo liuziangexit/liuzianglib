@@ -86,7 +86,7 @@ namespace DC {
 
 		//read only
 		//return nullptr if there is no instance yet
-		T* get_instance() {
+		T* get_instance()noexcept {
 			lock_flag();
 			DC::singletonSpace::FlagHolder fh(this->m_flag);
 
@@ -107,7 +107,7 @@ namespace DC {
 		}
 
 	private:
-		void lock_flag() {
+		void lock_flag()noexcept {
 			while (this->m_flag.test_and_set(std::memory_order_acquire))
 				DC::singletonSpace::spin_loop_pause();
 		}
