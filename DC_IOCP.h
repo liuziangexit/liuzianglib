@@ -9,7 +9,7 @@
 #include "DC_ThreadPool.h"
 #include "DC_type.h"
 #include "DC_timer.h"
-#include <vector>
+#include <unordered_set>
 #pragma comment(lib,"ws2_32.lib")
 //Version 2.4.21V30
 //20170914
@@ -80,7 +80,7 @@ namespace DC {
 						try {
 							new(ptr) value_type(std::forward<ARGS>(args)...);
 							std::lock_guard<std::mutex> lm_mut(m_mut);
-							m_list.push_back(ptr);
+							m_pointers.emplace(ptr);
 						}
 						catch (...) {
 							free(ptr);
@@ -106,58 +106,33 @@ namespace DC {
 					}
 
 					inline void put(value_type& obj)noexcept {
-						try {
-							std::lock_guard<std::mutex> lm_mut(m_mut);
-							m_list.push_back(&obj);
-						}
-						catch (...) {}
-					}
-
-					std::vector<pointer>& get_list() {
-						return m_list;
+						std::lock_guard<std::mutex> lm_mut(m_mut);
+						m_pointers.emplace(&obj);
 					}
 
 					void remove(pointer ptr) {
 						if (isNull(ptr)) return;
 						std::lock_guard<std::mutex> lm_mut(m_mut);
 
-						auto fres = std::find_if(m_list.begin(), m_list.end(), [&ptr](const pointer& it) {
-							return ptr == it;
-						});
-						if (fres == m_list.end()) return;
+						auto fres = m_pointers.find(ptr);
+						if (fres == m_pointers.end())
+							return;
 
 						destroy(*fres);
-						DC::vector_fast_erase_no_return(m_list, fres);
+						m_pointers.erase(fres);
 					}
 					
-					template <typename iter_type>
-					auto remove(pointer ptr, iter_type& inputiter)->decltype(this->get_list().begin()) {
-						if (inputiter == this->get_list().end()) return this->get_list().end();
-						if (isNull(ptr)) return inputiter + 1;						
-						//std::lock_guard<std::mutex> lm_mut(m_mut);
-
-						auto fres = std::find_if(m_list.begin(), m_list.end(), [&ptr](const pointer& it) {
-							return ptr == it;
-						});
-						if (fres == m_list.end()) return inputiter + 1;
-
-						destroy(*fres);
-						return DC::vector_fast_erase(m_list, fres);
-						//m_list.shrink_to_fit();
-					}
-
 					void clear()noexcept {
 						std::lock_guard<std::mutex> lock_m_mut(m_mut);
 
-						for (const auto& p : m_list)
+						for (const auto& p : m_pointers)
 							this->destroy(p);
 
-						m_list.clear();
-						m_list.shrink_to_fit();
+						m_pointers.clear();
 					}
 
 					bool empty()const {
-						return m_list.empty();
+						return m_pointers.empty();
 					}
 
 					inline void destroy(void* ptr) {
@@ -170,12 +145,8 @@ namespace DC {
 						return m_mut;
 					}
 
-					inline void reserve(const DC::size_t& _Size) {
-						m_list.reserve(_Size);
-					}
-
 				private:
-					std::vector<pointer> m_list;
+					std::unordered_set<pointer> m_pointers;
 					std::mutex m_mut;
 				};
 
@@ -459,7 +430,6 @@ namespace DC {
 					stop_listen();
 
 					IOCPSpace::IOCPAllocator<IOCPSpace::IOContext> ExitIO;
-					ExitIO.reserve(m_io_tp_threadnumber);
 					for (auto i = 0; i < m_io_tp_threadnumber; i++)
 						IOCPSpace::PostExit(m_iocp, ExitIO.make(0));
 
